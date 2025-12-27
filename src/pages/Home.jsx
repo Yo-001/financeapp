@@ -178,11 +178,6 @@ export default function Home({ expenses, setShowInsights }) {
             <BarChart
               data={monthlyData}
               margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
-              onClick={(data) => {
-                if (data && data.activeTooltipIndex !== undefined) {
-                  setActiveIndex(data.activeTooltipIndex);
-                }
-              }}
             >
               <XAxis
                 dataKey="month"
@@ -196,6 +191,9 @@ export default function Home({ expenses, setShowInsights }) {
                 fill="#14b8a6"
                 radius={[6, 6, 0, 0]}
                 isAnimationActive={false}
+                onClick={(data, index) => {
+                  setActiveIndex(activeIndex === index ? null : index);
+                }}
               >
                 <LabelList
                   dataKey="value"
@@ -204,22 +202,36 @@ export default function Home({ expenses, setShowInsights }) {
                     const { x, y, width, value, index } = props;
                     if (index !== activeIndex) return null;
                     return (
-                      <text
-                        x={x + width / 2}
-                        y={y - 10}
-                        fill="#14b8a6"
-                        textAnchor="middle"
-                        fontSize="12"
-                        fontWeight="bold"
-                      >
-                        €{value}
-                      </text>
+                      <g>
+                        <rect
+                          x={x + width / 2 - 30}
+                          y={y - 30}
+                          width="60"
+                          height="24"
+                          fill="#14b8a6"
+                          rx="12"
+                          opacity="0.95"
+                        />
+                        <text
+                          x={x + width / 2}
+                          y={y - 13}
+                          fill="white"
+                          textAnchor="middle"
+                          fontSize="13"
+                          fontWeight="bold"
+                        >
+                          €{value}
+                        </text>
+                      </g>
                     );
                   }}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          <p className="text-xs text-gray-400 text-center mt-2">
+            💡 Clique nas barras para ver o valor
+          </p>
         </div>
       </div>
     </div>
