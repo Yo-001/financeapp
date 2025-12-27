@@ -58,9 +58,13 @@ export default function Home({ expenses, setShowInsights }) {
 
   return (
     <div className="flex-1 bg-gradient-to-b from-teal-50 to-gray-50 pb-20">
-      {/* CSS para remover contorno laranja de foco em qualquer elemento do gráfico */}
+      {/* Força a remoção de qualquer contorno de foco em nível global para SVG e Recharts */}
       <style>{`
-        .recharts-rectangle:focus, .recharts-pie-sector:focus, .recharts-surface:focus {
+        .recharts-wrapper, .recharts-surface, .recharts-rectangle, .recharts-pie-sector {
+          outline: none !important;
+          -webkit-tap-highlight-color: transparent;
+        }
+        svg:focus {
           outline: none !important;
         }
       `}</style>
@@ -109,7 +113,8 @@ export default function Home({ expenses, setShowInsights }) {
           <h3 className="text-gray-900 font-bold mb-3 text-lg">Distribuição</h3>
           <div className="relative" style={{ height: "180px" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              {/* Adicionado style para garantir remoção de contorno no container */}
+              <PieChart style={{ outline: "none" }}>
                 <Pie
                   data={pieData}
                   cx="50%"
@@ -143,9 +148,11 @@ export default function Home({ expenses, setShowInsights }) {
             Últimos Meses
           </h3>
           <ResponsiveContainer width="100%" height={160}>
+            {/* Adicionado style para garantir remoção de contorno no container do BarChart */}
             <BarChart
               data={monthlyData}
               margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
+              style={{ outline: "none" }}
             >
               <XAxis
                 dataKey="month"
@@ -157,7 +164,8 @@ export default function Home({ expenses, setShowInsights }) {
                 dataKey="value"
                 fill="#14b8a6"
                 radius={[6, 6, 0, 0]}
-                onClick={(_, index) => setActiveIndex(index)} // Clique direto na barra
+                onClick={(_, index) => setActiveIndex(index)}
+                style={{ outline: "none" }}
               >
                 <LabelList
                   dataKey="value"
