@@ -79,16 +79,18 @@ export default function Transactions({ expenses = [], setExpenses }) {
 
   const handleAddExpense = () => {
     if (newExpense.name && newExpense.value) {
+      // FIX: Criar a string de data manualmente baseada nos filtros selecionados.
+      // Isso evita problemas de fuso horário que poderiam jogar a data para o mês anterior.
+      const fixedMonth = selectedMonth.toString().padStart(2, "0");
+      const fixedDate = `${selectedYear}-${fixedMonth}-01`;
+
       setExpenses([
         ...expenses,
         {
           id: Date.now(),
           name: newExpense.name,
           value: parseFloat(newExpense.value),
-          // Garante vinculação ao mês/ano aberto atualmente
-          date: new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, 1)
-            .toISOString()
-            .split("T")[0],
+          date: fixedDate, // Usa a data vinculada aos filtros
           category: newExpense.category || "Outros",
           paid: newExpense.paid === "pago",
           week: newExpense.week,
@@ -110,7 +112,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
     setSwipedItem(null);
   };
 
-  // Alterado para alternar (Toggle) em vez de apenas marcar como pago
   const handleToggleStatus = (id) => {
     setExpenses(
       expenses.map((e) => (e.id === id ? { ...e, paid: !e.paid } : e))
@@ -141,12 +142,11 @@ export default function Transactions({ expenses = [], setExpenses }) {
     const diff = swipedItem.currentX - swipedItem.startX;
 
     if (Math.abs(diff) > 100) {
-      // INVERTIDO: Direita (diff > 0) agora Elimina
       if (diff > 0) {
+        // Deslizar para Direita -> Deletar
         handleDelete(expense.id);
-      }
-      // INVERTIDO: Esquerda (diff < 0) agora Alterna Status (Pago/Pendente)
-      else if (diff < 0) {
+      } else if (diff < 0) {
+        // Deslizar para Esquerda -> Alternar Status
         handleToggleStatus(expense.id);
       }
     }
@@ -212,7 +212,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
           </div>
         ) : (
           <>
-            {/* Filtro de Ano */}
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
@@ -225,7 +224,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
               ))}
             </select>
 
-            {/* Filtro de Mês */}
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
@@ -238,7 +236,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
               ))}
             </select>
 
-            {/* Filtro de Semana */}
             <select
               value={selectedWeek}
               onChange={(e) => setSelectedWeek(e.target.value)}
@@ -251,28 +248,24 @@ export default function Transactions({ expenses = [], setExpenses }) {
               <option value="4">4ª Semana</option>
             </select>
 
-            {/* Lista de Gastos com Swipe */}
             <div className="space-y-0 bg-white rounded-2xl overflow-hidden shadow-sm">
               {filteredExpenses.map((expense) => (
                 <div
                   key={expense.id}
                   className="relative overflow-hidden border-b border-gray-100 last:border-0"
                 >
-                  {/* Ações de fundo */}
                   <div className="absolute inset-0 flex">
-                    {/* Lado Esquerdo (Aparece ao deslizar p/ Direita) -> Deletar (Vermelho) */}
+                    {/* Deslize direita -> Deletar (Vermelho) */}
                     <div className="flex-1 bg-red-500 flex items-center justify-start px-6">
                       <Trash2 className="w-6 h-6 text-white" />
                     </div>
-                    {/* Lado Direito (Aparece ao deslizar p/ Esquerda) -> Check/Alternar (Verde) */}
+                    {/* Deslize esquerda -> Alternar Status (Verde) */}
                     <div className="flex-1 bg-green-500 flex items-center justify-end px-6">
                       <Check className="w-6 h-6 text-white" />
                     </div>
                   </div>
 
-                  {/* Card principal */}
                   <div
-                    // REMOVIDO rounded-2xl para eliminar bordas arredondadas que conflitavam com o fundo
                     className="bg-white p-4 flex items-center relative"
                     style={{
                       transform: `translateX(${getSwipeOffset(expense.id)}px)`,
