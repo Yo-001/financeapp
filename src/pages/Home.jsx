@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react"; // Adicionado useState
 import { TrendingUp, ShoppingBag } from "lucide-react";
 import {
   PieChart,
@@ -8,9 +8,12 @@ import {
   Bar,
   XAxis,
   ResponsiveContainer,
+  LabelList, // Adicionado para mostrar o valor
 } from "recharts";
 
 export default function Home({ expenses, setShowInsights }) {
+  const [activeIndex, setActiveIndex] = useState(null); // Estado para controlar o clique na barra
+
   const monthNames = [
     "Janeiro",
     "Fevereiro",
@@ -108,9 +111,15 @@ export default function Home({ expenses, setShowInsights }) {
                   outerRadius={70}
                   paddingAngle={3}
                   dataKey="value"
+                  // Remove o contorno laranja ao clicar no PieChart
+                  activeShape={false}
                 >
                   {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.color}
+                      stroke="none"
+                    />
                   ))}
                 </Pie>
               </PieChart>
@@ -127,9 +136,41 @@ export default function Home({ expenses, setShowInsights }) {
             Últimos Meses
           </h3>
           <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={monthlyData}>
-              <XAxis dataKey="month" tick={{ fill: "#999", fontSize: 11 }} />
-              <Bar dataKey="value" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+            <BarChart
+              data={monthlyData}
+              onClick={(state) => {
+                if (state && state.activeTooltipIndex !== undefined) {
+                  setActiveIndex(state.activeTooltipIndex);
+                }
+              }}
+            >
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#999", fontSize: 11 }}
+              />
+              <Bar
+                dataKey="value"
+                fill="#14b8a6"
+                radius={[6, 6, 0, 0]}
+                activeBar={false} // Remove o destaque padrão (contorno)
+                isAnimationActive={false}
+              >
+                {/* Exibe o valor apenas se o índice for o clicado */}
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  style={{
+                    fill: "#14b8a6",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                  }}
+                  formatter={(value, index) =>
+                    activeIndex === index ? `€${value}` : ""
+                  }
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
