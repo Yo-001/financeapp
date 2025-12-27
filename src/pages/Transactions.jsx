@@ -85,6 +85,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
           id: Date.now(),
           name: newExpense.name,
           value: parseFloat(newExpense.value),
+          // Garante vinculação ao mês/ano aberto atualmente
           date: new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, 1)
             .toISOString()
             .split("T")[0],
@@ -109,8 +110,11 @@ export default function Transactions({ expenses = [], setExpenses }) {
     setSwipedItem(null);
   };
 
-  const handleMarkAsPaid = (id) => {
-    setExpenses(expenses.map((e) => (e.id === id ? { ...e, paid: true } : e)));
+  // Alterado para alternar (Toggle) em vez de apenas marcar como pago
+  const handleToggleStatus = (id) => {
+    setExpenses(
+      expenses.map((e) => (e.id === id ? { ...e, paid: !e.paid } : e))
+    );
     setSwipedItem(null);
   };
 
@@ -137,10 +141,13 @@ export default function Transactions({ expenses = [], setExpenses }) {
     const diff = swipedItem.currentX - swipedItem.startX;
 
     if (Math.abs(diff) > 100) {
-      if (diff < 0) {
+      // INVERTIDO: Direita (diff > 0) agora Elimina
+      if (diff > 0) {
         handleDelete(expense.id);
-      } else if (diff > 0 && !expense.paid) {
-        handleMarkAsPaid(expense.id);
+      }
+      // INVERTIDO: Esquerda (diff < 0) agora Alterna Status (Pago/Pendente)
+      else if (diff < 0) {
+        handleToggleStatus(expense.id);
       }
     }
 
@@ -245,22 +252,28 @@ export default function Transactions({ expenses = [], setExpenses }) {
             </select>
 
             {/* Lista de Gastos com Swipe */}
-            <div className="space-y-2">
+            <div className="space-y-0 bg-white rounded-2xl overflow-hidden shadow-sm">
               {filteredExpenses.map((expense) => (
-                <div key={expense.id} className="relative overflow-hidden">
+                <div
+                  key={expense.id}
+                  className="relative overflow-hidden border-b border-gray-100 last:border-0"
+                >
                   {/* Ações de fundo */}
                   <div className="absolute inset-0 flex">
-                    <div className="flex-1 bg-red-500 flex items-center justify-end px-6">
+                    {/* Lado Esquerdo (Aparece ao deslizar p/ Direita) -> Deletar (Vermelho) */}
+                    <div className="flex-1 bg-red-500 flex items-center justify-start px-6">
                       <Trash2 className="w-6 h-6 text-white" />
                     </div>
-                    <div className="flex-1 bg-green-500 flex items-center justify-start px-6">
+                    {/* Lado Direito (Aparece ao deslizar p/ Esquerda) -> Check/Alternar (Verde) */}
+                    <div className="flex-1 bg-green-500 flex items-center justify-end px-6">
                       <Check className="w-6 h-6 text-white" />
                     </div>
                   </div>
 
                   {/* Card principal */}
                   <div
-                    className="bg-white rounded-2xl p-4 shadow-sm flex items-center relative"
+                    // REMOVIDO rounded-2xl para eliminar bordas arredondadas que conflitavam com o fundo
+                    className="bg-white p-4 flex items-center relative"
                     style={{
                       transform: `translateX(${getSwipeOffset(expense.id)}px)`,
                       transition:
@@ -306,7 +319,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
               ))}
 
               {filteredExpenses.length === 0 && (
-                <div className="bg-white rounded-2xl p-8 text-center">
+                <div className="p-8 text-center">
                   <p className="text-gray-400 text-sm">
                     Nenhum gasto registrado neste período
                   </p>
