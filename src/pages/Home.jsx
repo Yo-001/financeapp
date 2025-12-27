@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { TrendingUp, ShoppingBag } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -9,7 +9,6 @@ import {
   XAxis,
   ResponsiveContainer,
   LabelList,
-  Tooltip, // Importado para ser desativado
 } from "recharts";
 
 export default function Home({ expenses, setShowInsights }) {
@@ -59,17 +58,46 @@ export default function Home({ expenses, setShowInsights }) {
 
   return (
     <div className="flex-1 bg-gradient-to-b from-teal-50 to-gray-50 pb-20">
-      {/* CSS agressivo para remover o contorno (outline) de todos os elementos internos do gráfico */}
+      {/* CSS global para remover TODOS os contornos e highlights */}
       <style>{`
+        /* Remove contorno de foco */
         .recharts-surface:focus, 
         .recharts-wrapper:focus, 
         .recharts-rectangle:focus, 
         .recharts-sector:focus,
-        path:focus {
+        .recharts-bar:focus,
+        .recharts-bar-rectangle:focus,
+        path:focus,
+        rect:focus,
+        svg:focus,
+        g:focus {
           outline: none !important;
+          outline-width: 0 !important;
+          outline-offset: 0 !important;
         }
+
+        /* Remove highlight de toque mobile */
         * {
-          -webkit-tap-highlight-color: transparent;
+          -webkit-tap-highlight-color: transparent !important;
+          -webkit-touch-callout: none !important;
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+          user-select: none !important;
+        }
+
+        /* Remove contorno laranja específico do Recharts */
+        .recharts-wrapper,
+        .recharts-surface,
+        .recharts-bar,
+        .recharts-rectangle {
+          outline: none !important;
+          border: none !important;
+        }
+
+        /* Remove qualquer foco visível */
+        .recharts-wrapper *:focus {
+          outline: none !important;
         }
       `}</style>
 
@@ -127,7 +155,6 @@ export default function Home({ expenses, setShowInsights }) {
                   paddingAngle={3}
                   dataKey="value"
                   stroke="none"
-                  activeShape={false} // Desativa o efeito de seleção visual
                   isAnimationActive={false}
                 >
                   {pieData.map((entry, index) => (
@@ -151,6 +178,11 @@ export default function Home({ expenses, setShowInsights }) {
             <BarChart
               data={monthlyData}
               margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
+              onClick={(data) => {
+                if (data && data.activeTooltipIndex !== undefined) {
+                  setActiveIndex(data.activeTooltipIndex);
+                }
+              }}
             >
               <XAxis
                 dataKey="month"
@@ -158,15 +190,12 @@ export default function Home({ expenses, setShowInsights }) {
                 tickLine={false}
                 tick={{ fill: "#999", fontSize: 11 }}
               />
-              {/* O Tooltip precisa estar presente mas escondido para o clique funcionar sem contornos */}
-              <Tooltip cursor={false} content={() => null} />
 
               <Bar
                 dataKey="value"
                 fill="#14b8a6"
                 radius={[6, 6, 0, 0]}
-                onClick={(_, index) => setActiveIndex(index)}
-                activeBar={false} // Remove o estado ativo da barra
+                isAnimationActive={false}
               >
                 <LabelList
                   dataKey="value"
