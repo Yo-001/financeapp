@@ -9,6 +9,7 @@ import {
   XAxis,
   ResponsiveContainer,
   LabelList,
+  Tooltip, // Importado para ser desativado
 } from "recharts";
 
 export default function Home({ expenses, setShowInsights }) {
@@ -58,14 +59,17 @@ export default function Home({ expenses, setShowInsights }) {
 
   return (
     <div className="flex-1 bg-gradient-to-b from-teal-50 to-gray-50 pb-20">
-      {/* Força a remoção de qualquer contorno de foco em nível global para SVG e Recharts */}
+      {/* CSS agressivo para remover o contorno (outline) de todos os elementos internos do gráfico */}
       <style>{`
-        .recharts-wrapper, .recharts-surface, .recharts-rectangle, .recharts-pie-sector {
+        .recharts-surface:focus, 
+        .recharts-wrapper:focus, 
+        .recharts-rectangle:focus, 
+        .recharts-sector:focus,
+        path:focus {
           outline: none !important;
-          -webkit-tap-highlight-color: transparent;
         }
-        svg:focus {
-          outline: none !important;
+        * {
+          -webkit-tap-highlight-color: transparent;
         }
       `}</style>
 
@@ -113,8 +117,7 @@ export default function Home({ expenses, setShowInsights }) {
           <h3 className="text-gray-900 font-bold mb-3 text-lg">Distribuição</h3>
           <div className="relative" style={{ height: "180px" }}>
             <ResponsiveContainer width="100%" height="100%">
-              {/* Adicionado style para garantir remoção de contorno no container */}
-              <PieChart style={{ outline: "none" }}>
+              <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
@@ -124,14 +127,11 @@ export default function Home({ expenses, setShowInsights }) {
                   paddingAngle={3}
                   dataKey="value"
                   stroke="none"
+                  activeShape={false} // Desativa o efeito de seleção visual
                   isAnimationActive={false}
                 >
                   {pieData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.color}
-                      style={{ outline: "none" }}
-                    />
+                    <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
               </PieChart>
@@ -148,11 +148,9 @@ export default function Home({ expenses, setShowInsights }) {
             Últimos Meses
           </h3>
           <ResponsiveContainer width="100%" height={160}>
-            {/* Adicionado style para garantir remoção de contorno no container do BarChart */}
             <BarChart
               data={monthlyData}
               margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
-              style={{ outline: "none" }}
             >
               <XAxis
                 dataKey="month"
@@ -160,12 +158,15 @@ export default function Home({ expenses, setShowInsights }) {
                 tickLine={false}
                 tick={{ fill: "#999", fontSize: 11 }}
               />
+              {/* O Tooltip precisa estar presente mas escondido para o clique funcionar sem contornos */}
+              <Tooltip cursor={false} content={() => null} />
+
               <Bar
                 dataKey="value"
                 fill="#14b8a6"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, index) => setActiveIndex(index)}
-                style={{ outline: "none" }}
+                activeBar={false} // Remove o estado ativo da barra
               >
                 <LabelList
                   dataKey="value"
