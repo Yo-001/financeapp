@@ -1,4 +1,4 @@
-import React, { useState } from "react"; // Adicionado useState
+import React, { useState } from "react";
 import { TrendingUp, ShoppingBag } from "lucide-react";
 import {
   PieChart,
@@ -8,11 +8,11 @@ import {
   Bar,
   XAxis,
   ResponsiveContainer,
-  LabelList, // Adicionado para mostrar o valor
+  LabelList,
 } from "recharts";
 
 export default function Home({ expenses, setShowInsights }) {
-  const [activeIndex, setActiveIndex] = useState(null); // Estado para controlar o clique na barra
+  const [activeIndex, setActiveIndex] = useState(null);
 
   const monthNames = [
     "Janeiro",
@@ -58,6 +58,13 @@ export default function Home({ expenses, setShowInsights }) {
 
   return (
     <div className="flex-1 bg-gradient-to-b from-teal-50 to-gray-50 pb-20">
+      {/* CSS para remover contorno laranja de foco em qualquer elemento do gráfico */}
+      <style>{`
+        .recharts-rectangle:focus, .recharts-pie-sector:focus, .recharts-surface:focus {
+          outline: none !important;
+        }
+      `}</style>
+
       <div className="bg-gradient-to-br from-teal-600 to-teal-500 px-4 pt-6 pb-8 rounded-b-3xl shadow-lg">
         <h1 className="text-white text-2xl font-bold mb-2">Olá! 👋</h1>
         <p className="text-teal-100 text-sm">Seu resumo financeiro</p>
@@ -111,14 +118,14 @@ export default function Home({ expenses, setShowInsights }) {
                   outerRadius={70}
                   paddingAngle={3}
                   dataKey="value"
-                  // Remove o contorno laranja ao clicar no PieChart
-                  activeShape={false}
+                  stroke="none"
+                  isAnimationActive={false}
                 >
                   {pieData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={entry.color}
-                      stroke="none"
+                      style={{ outline: "none" }}
                     />
                   ))}
                 </Pie>
@@ -138,11 +145,7 @@ export default function Home({ expenses, setShowInsights }) {
           <ResponsiveContainer width="100%" height={160}>
             <BarChart
               data={monthlyData}
-              onClick={(state) => {
-                if (state && state.activeTooltipIndex !== undefined) {
-                  setActiveIndex(state.activeTooltipIndex);
-                }
-              }}
+              margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
             >
               <XAxis
                 dataKey="month"
@@ -154,21 +157,27 @@ export default function Home({ expenses, setShowInsights }) {
                 dataKey="value"
                 fill="#14b8a6"
                 radius={[6, 6, 0, 0]}
-                activeBar={false} // Remove o destaque padrão (contorno)
-                isAnimationActive={false}
+                onClick={(_, index) => setActiveIndex(index)} // Clique direto na barra
               >
-                {/* Exibe o valor apenas se o índice for o clicado */}
                 <LabelList
                   dataKey="value"
                   position="top"
-                  style={{
-                    fill: "#14b8a6",
-                    fontSize: "12px",
-                    fontWeight: "bold",
+                  content={(props) => {
+                    const { x, y, width, value, index } = props;
+                    if (index !== activeIndex) return null;
+                    return (
+                      <text
+                        x={x + width / 2}
+                        y={y - 10}
+                        fill="#14b8a6"
+                        textAnchor="middle"
+                        fontSize="12"
+                        fontWeight="bold"
+                      >
+                        €{value}
+                      </text>
+                    );
                   }}
-                  formatter={(value, index) =>
-                    activeIndex === index ? `€${value}` : ""
-                  }
                 />
               </Bar>
             </BarChart>
