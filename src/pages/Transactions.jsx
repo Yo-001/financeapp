@@ -7,6 +7,7 @@ import {
   Check,
   Settings,
   Calendar,
+  Filter,
 } from "lucide-react";
 
 export default function Transactions({ expenses = [], setExpenses }) {
@@ -20,6 +21,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
   const [selectedWeek, setSelectedWeek] = useState("todas");
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showFixedExpenses, setShowFixedExpenses] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [swipedItem, setSwipedItem] = useState(null);
 
   const [newExpense, setNewExpense] = useState({
@@ -89,6 +91,15 @@ export default function Transactions({ expenses = [], setExpenses }) {
 
     return true;
   });
+
+  // Calcular totais do mês
+  const totalMonthly = filteredExpenses.reduce((sum, e) => sum + e.value, 0);
+  const totalPaid = filteredExpenses
+    .filter((e) => e.paid)
+    .reduce((sum, e) => sum + e.value, 0);
+  const totalPending = filteredExpenses
+    .filter((e) => !e.paid)
+    .reduce((sum, e) => sum + e.value, 0);
 
   const weeklyData = [
     { week: "1ª", pago: 0, pendente: 0, total: 0 },
@@ -226,12 +237,20 @@ export default function Transactions({ expenses = [], setExpenses }) {
       <div className="bg-white px-4 pt-6 pb-4 border-b">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold text-gray-900">Período</h1>
-          <button
-            onClick={() => setShowFixedExpenses(true)}
-            className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-          >
-            <Settings className="w-5 h-5 text-gray-600" />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowFilters(true)}
+              className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
+            >
+              <Filter className="w-5 h-5 text-gray-600" />
+            </button>
+            <button
+              onClick={() => setShowFixedExpenses(true)}
+              className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
+            >
+              <Settings className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
         <div className="flex gap-2">
           {["mensal", "semanal"].map((period) => (
@@ -280,41 +299,34 @@ export default function Transactions({ expenses = [], setExpenses }) {
           </div>
         ) : (
           <>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full mb-3 px-4 py-3 bg-white border-0 rounded-2xl shadow-sm text-sm font-medium"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  📅 Ano {year}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full mb-3 px-4 py-3 bg-white border-0 rounded-2xl shadow-sm text-sm font-medium"
-            >
-              {months.map((month) => (
-                <option key={month.value} value={month.value}>
-                  🗓️ {month.label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(e.target.value)}
-              className="w-full mb-3 px-4 py-3 bg-white border-0 rounded-2xl shadow-sm text-sm font-medium"
-            >
-              <option value="todas">📋 Todas as Semanas</option>
-              <option value="1">1ª Semana</option>
-              <option value="2">2ª Semana</option>
-              <option value="3">3ª Semana</option>
-              <option value="4">4ª Semana</option>
-            </select>
+            {/* Resumo do Mês */}
+            <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-3xl p-5 mb-4 text-white shadow-lg">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <p className="text-teal-100 text-xs mb-1">
+                    {months.find((m) => m.value === selectedMonth)?.label}{" "}
+                    {selectedYear}
+                  </p>
+                  <h3 className="text-3xl font-bold">€{totalMonthly}</h3>
+                </div>
+                <button
+                  onClick={() => setShowFilters(true)}
+                  className="p-2 bg-white bg-opacity-20 rounded-xl hover:bg-opacity-30 transition"
+                >
+                  <Filter className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="bg-white bg-opacity-20 rounded-xl p-3">
+                  <p className="text-teal-100 text-xs mb-1">Pago</p>
+                  <p className="text-2xl font-bold">€{totalPaid}</p>
+                </div>
+                <div className="bg-white bg-opacity-20 rounded-xl p-3">
+                  <p className="text-teal-100 text-xs mb-1">Pendente</p>
+                  <p className="text-2xl font-bold">€{totalPending}</p>
+                </div>
+              </div>
+            </div>
 
             {filteredExpenses.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
@@ -489,6 +501,83 @@ export default function Transactions({ expenses = [], setExpenses }) {
               className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
             >
               Salvar Gasto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Filtros */}
+      {showFilters && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
+          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[70vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Filtros</h3>
+              <button
+                onClick={() => setShowFilters(false)}
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Ano
+                </label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Mês
+                </label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
+                >
+                  {months.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Semana
+                </label>
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
+                >
+                  <option value="todas">Todas as Semanas</option>
+                  <option value="1">1ª Semana</option>
+                  <option value="2">2ª Semana</option>
+                  <option value="3">3ª Semana</option>
+                  <option value="4">4ª Semana</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowFilters(false)}
+              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+            >
+              Aplicar Filtros
             </button>
           </div>
         </div>

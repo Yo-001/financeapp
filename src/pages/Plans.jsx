@@ -6,11 +6,15 @@ import {
   ChevronRight,
   X,
   ExternalLink,
+  Edit,
+  Trash2,
 } from "lucide-react";
 
 export default function Plans({ planningItems, setPlanningItems }) {
   const [showAddPlanning, setShowAddPlanning] = useState(false);
   const [selectedPlanningItem, setSelectedPlanningItem] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [newPlanning, setNewPlanning] = useState({
     name: "",
     value: "",
@@ -52,6 +56,35 @@ export default function Plans({ planningItems, setPlanningItems }) {
       });
       setShowAddPlanning(false);
     }
+  };
+
+  const handleEditPlanning = () => {
+    if (
+      editingItem.name &&
+      editingItem.value &&
+      editingItem.paymentMethods.length > 0
+    ) {
+      setPlanningItems(
+        planningItems.map((item) =>
+          item.id === editingItem.id ? editingItem : item
+        )
+      );
+      setIsEditing(false);
+      setEditingItem(null);
+      setSelectedPlanningItem(null);
+    }
+  };
+
+  const handleDeletePlanning = (id) => {
+    if (window.confirm("Tem certeza que deseja eliminar este item?")) {
+      setPlanningItems(planningItems.filter((item) => item.id !== id));
+      setSelectedPlanningItem(null);
+    }
+  };
+
+  const startEditing = (item) => {
+    setEditingItem({ ...item });
+    setIsEditing(true);
   };
 
   return (
@@ -223,7 +256,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
         </div>
       )}
 
-      {selectedPlanningItem && (
+      {selectedPlanningItem && !isEditing && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md">
             <div className="flex justify-between mb-4">
@@ -274,7 +307,128 @@ export default function Plans({ planningItems, setPlanningItems }) {
                   Sem link
                 </div>
               )}
+
+              {/* Botões de Ação */}
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <button
+                  onClick={() => startEditing(selectedPlanningItem)}
+                  className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
+                >
+                  <Edit className="w-5 h-5" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleDeletePlanning(selectedPlanningItem.id)}
+                  className="flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  Eliminar
+                </button>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar */}
+      {isEditing && editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
+          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Editar Item</h3>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={editingItem.name}
+                onChange={(e) =>
+                  setEditingItem({ ...editingItem, name: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                placeholder="Nome"
+              />
+              <input
+                type="number"
+                value={editingItem.value}
+                onChange={(e) =>
+                  setEditingItem({ ...editingItem, value: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                placeholder="Valor (€)"
+              />
+
+              <div className="space-y-2">
+                {["à vista", "parcelado"].map((m) => (
+                  <label
+                    key={m}
+                    className="flex items-center p-3 bg-gray-50 rounded-xl"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editingItem.paymentMethods.includes(m)}
+                      onChange={(e) => {
+                        if (e.target.checked)
+                          setEditingItem({
+                            ...editingItem,
+                            paymentMethods: [...editingItem.paymentMethods, m],
+                          });
+                        else
+                          setEditingItem({
+                            ...editingItem,
+                            paymentMethods: editingItem.paymentMethods.filter(
+                              (x) => x !== m
+                            ),
+                          });
+                      }}
+                      className="w-5 h-5 mr-3"
+                    />
+                    <span className="capitalize">{m}</span>
+                  </label>
+                ))}
+              </div>
+
+              {editingItem.paymentMethods.includes("parcelado") && (
+                <input
+                  type="number"
+                  value={editingItem.installments}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      installments: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-4 border-2 border-purple-200 bg-purple-50 rounded-2xl"
+                  placeholder="Nº de parcelas"
+                />
+              )}
+
+              <input
+                type="url"
+                value={editingItem.link}
+                onChange={(e) =>
+                  setEditingItem({ ...editingItem, link: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl"
+                placeholder="Link (opcional)"
+              />
+            </div>
+
+            <button
+              onClick={handleEditPlanning}
+              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+            >
+              Salvar Alterações
+            </button>
           </div>
         </div>
       )}
