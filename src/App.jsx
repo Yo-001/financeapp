@@ -4,6 +4,7 @@ import Transactions from "./pages/Transactions";
 import Plans from "./pages/Plans";
 import BottomNav from "./components/BottomNav";
 import More from "./pages/More";
+import { Preferences } from "@capacitor/preferences";
 
 function App() {
   const [activeTab, setActiveTab] = useState("inicio");
@@ -85,19 +86,40 @@ function App() {
     },
   ]);
 
+  /* ==========================
+     LOAD STORAGE (ON START)
+  =========================== */
   useEffect(() => {
-    const saved = localStorage.getItem("expenses");
-    const savedP = localStorage.getItem("planningItems");
-    if (saved) setExpenses(JSON.parse(saved));
-    if (savedP) setPlanningItems(JSON.parse(savedP));
+    const loadData = async () => {
+      const { value: savedExpenses } = await Preferences.get({
+        key: "expenses",
+      });
+      const { value: savedPlanning } = await Preferences.get({
+        key: "planningItems",
+      });
+
+      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
+      if (savedPlanning) setPlanningItems(JSON.parse(savedPlanning));
+    };
+
+    loadData();
   }, []);
 
+  /* ==========================
+     SAVE STORAGE (AUTO)
+  =========================== */
   useEffect(() => {
-    localStorage.setItem("expenses", JSON.stringify(expenses));
+    Preferences.set({
+      key: "expenses",
+      value: JSON.stringify(expenses),
+    });
   }, [expenses]);
 
   useEffect(() => {
-    localStorage.setItem("planningItems", JSON.stringify(planningItems));
+    Preferences.set({
+      key: "planningItems",
+      value: JSON.stringify(planningItems),
+    });
   }, [planningItems]);
 
   return (
@@ -106,15 +128,18 @@ function App() {
         {!showInsights && activeTab === "inicio" && (
           <Home expenses={expenses} setShowInsights={setShowInsights} />
         )}
+
         {!showInsights && activeTab === "periodo" && (
           <Transactions expenses={expenses} setExpenses={setExpenses} />
         )}
+
         {!showInsights && activeTab === "planejamento" && (
           <Plans
             planningItems={planningItems}
             setPlanningItems={setPlanningItems}
           />
         )}
+
         {showInsights && (
           <More expenses={expenses} setShowInsights={setShowInsights} />
         )}

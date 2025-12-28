@@ -13,6 +13,7 @@
     "@capacitor/android": "^7.4.4",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
+    "@capacitor/preferences": "^7.0.3",
     "expo": "^54.0.29",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
