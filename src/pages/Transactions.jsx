@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Plus, ShoppingBag, X, Trash2, Check } from "lucide-react";
 
 export default function Transactions({ expenses = [], setExpenses }) {
@@ -49,30 +49,52 @@ export default function Transactions({ expenses = [], setExpenses }) {
     { value: "12", label: "Dezembro" },
   ];
 
-  // 🔹 Gastos do mês (ignora semana)
-  const monthlyExpenses = useMemo(() => {
-    return expenses.filter((e) => {
-      const d = new Date(e.date);
-      return (
-        d.getFullYear().toString() === selectedYear &&
-        (d.getMonth() + 1).toString() === selectedMonth
-      );
-    });
-  }, [expenses, selectedYear, selectedMonth]);
+  // 🔹 Gastos filtrados normalmente (com semana)
+  const filteredExpenses = expenses.filter((e) => {
+    const expDate = new Date(e.date);
+    const expYear = expDate.getFullYear().toString();
+    const expMonth = (expDate.getMonth() + 1).toString();
+
+    if (expYear !== selectedYear) return false;
+    if (expMonth !== selectedMonth) return false;
+    if (selectedWeek !== "todas" && e.week !== selectedWeek) return false;
+
+    return true;
+  });
+
+  // 🔹 Gastos do mês (IGNORA semana) → para detectar mês vazio
+  const monthlyExpenses = expenses.filter((e) => {
+    const d = new Date(e.date);
+    return (
+      d.getFullYear().toString() === selectedYear &&
+      (d.getMonth() + 1).toString() === selectedMonth
+    );
+  });
 
   const isNewMonth = monthlyExpenses.length === 0;
 
-  // 🔹 Filtro completo (com semana)
-  const filteredExpenses = monthlyExpenses.filter((e) => {
-    if (selectedWeek !== "todas" && e.week !== selectedWeek) return false;
-    return true;
+  const weeklyData = [
+    { week: "1ª", pago: 0, pendente: 0, total: 0 },
+    { week: "2ª", pago: 0, pendente: 0, total: 0 },
+    { week: "3ª", pago: 0, pendente: 0, total: 0 },
+    { week: "4ª", pago: 0, pendente: 0, total: 0 },
+  ];
+
+  filteredExpenses.forEach((expense) => {
+    const idx = parseInt(expense.week) - 1;
+    if (idx >= 0 && idx < 4) {
+      weeklyData[idx].total += expense.value;
+      expense.paid
+        ? (weeklyData[idx].pago += expense.value)
+        : (weeklyData[idx].pendente += expense.value);
+    }
   });
 
   const handleAddExpense = () => {
     if (!newExpense.name || !newExpense.value) return;
 
     const fixedMonth = selectedMonth.padStart(2, "0");
-    const date = `${selectedYear}-${fixedMonth}-01`;
+    const fixedDate = `${selectedYear}-${fixedMonth}-01`;
 
     setExpenses([
       ...expenses,
@@ -80,7 +102,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
         id: Date.now(),
         name: newExpense.name,
         value: parseFloat(newExpense.value),
-        date,
+        date: fixedDate,
         category: newExpense.category || "Outros",
         paid: newExpense.paid === "pago",
         week: newExpense.week,
@@ -94,10 +116,11 @@ export default function Transactions({ expenses = [], setExpenses }) {
       week: "1",
       category: "",
     });
+
     setShowAddExpense(false);
   };
 
-  // 🔹 Iniciar mês com gastos fixos
+  // 🔹 NOVO: iniciar mês com gastos fixos
   const handleStartMonth = () => {
     const fixedExpenses =
       JSON.parse(localStorage.getItem("fixedExpenses")) || [];
@@ -105,7 +128,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
     if (fixedExpenses.length === 0) return;
 
     const fixedMonth = selectedMonth.padStart(2, "0");
-    const date = `${selectedYear}-${fixedMonth}-01`;
+    const fixedDate = `${selectedYear}-${fixedMonth}-01`;
 
     const generated = fixedExpenses.map((item) => ({
       id: Date.now() + Math.random(),
@@ -114,7 +137,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
       category: item.category || "Outros",
       week: item.week,
       paid: false,
-      date,
+      date: fixedDate,
     }));
 
     setExpenses([...expenses, ...generated]);
@@ -137,7 +160,8 @@ export default function Transactions({ expenses = [], setExpenses }) {
   };
 
   const handleTouchEnd = (e, expense) => {
-    if (!swipedItem) return;
+    if (!swipedItem || swipedItem.id !== expense.id) return;
+
     const diff = e.changedTouches[0].clientX - swipedItem.startX;
 
     if (Math.abs(diff) > 100) {
@@ -148,46 +172,58 @@ export default function Transactions({ expenses = [], setExpenses }) {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 pb-20 px-4 pt-4">
-      {isNewMonth ? (
-        <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-          <h3 className="text-xl font-bold mb-2">Novo mês iniciado</h3>
-          <p className="text-gray-500 mb-6">Nenhum gasto registrado ainda</p>
-          <button
-            onClick={handleStartMonth}
-            className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg"
-          >
-            Iniciar Mês
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          {filteredExpenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="p-4 flex items-center border-b last:border-0"
-              onTouchStart={(e) => handleTouchStart(e, expense.id)}
-              onTouchEnd={(e) => handleTouchEnd(e, expense)}
+    <div className="flex-1 bg-gray-50 pb-20">
+      <div className="px-4 pt-4">
+        {isNewMonth ? (
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+            <h3 className="text-xl font-bold mb-2">Novo mês</h3>
+            <p className="text-gray-500 mb-6">Nenhum gasto registrado ainda</p>
+            <button
+              onClick={handleStartMonth}
+              className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg"
             >
-              <div className="w-12 h-12 bg-teal-100 rounded-2xl flex items-center justify-center mr-3">
-                <ShoppingBag className="w-6 h-6 text-teal-600" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-bold">{expense.name}</h4>
-                <p className="text-xs text-gray-500">
-                  {expense.category} • Semana {expense.week}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="font-bold">€{expense.value}</div>
-                <div className="text-xs">
-                  {expense.paid ? "✓ Pago" : "Pendente"}
+              Iniciar Mês
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-0 bg-white rounded-2xl overflow-hidden shadow-sm">
+            {filteredExpenses.map((expense) => (
+              <div
+                key={expense.id}
+                className="relative overflow-hidden border-b last:border-0"
+              >
+                <div
+                  className="bg-white p-4 flex items-center"
+                  onTouchStart={(e) => handleTouchStart(e, expense.id)}
+                  onTouchEnd={(e) => handleTouchEnd(e, expense)}
+                >
+                  <div className="w-12 h-12 bg-teal-100 rounded-2xl flex items-center justify-center mr-3">
+                    <ShoppingBag className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold">{expense.name}</h4>
+                    <p className="text-xs text-gray-500">
+                      {expense.category} • Semana {expense.week}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold">€{expense.value}</div>
+                    <div className="text-xs">
+                      {expense.paid ? "✓ Pago" : "Pendente"}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+
+            {filteredExpenses.length === 0 && (
+              <div className="p-8 text-center text-gray-400">
+                Nenhum gasto nesta semana
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <button
         onClick={() => setShowAddExpense(true)}
