@@ -152,9 +152,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
       {isNewMonth ? (
         <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
           <h3 className="text-xl font-bold mb-2">Novo mês iniciado</h3>
-          <p className="text-gray-500 mb-6">
-            Nenhum gasto registrado ainda
-          </p>
+          <p className="text-gray-500 mb-6">Nenhum gasto registrado ainda</p>
           <button
             onClick={handleStartMonth}
             className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg"
@@ -198,4 +196,41 @@ export default function Transactions({ expenses = [], setExpenses }) {
         <Plus className="w-8 h-8 text-white" />
       </button>
 
-      {showA
+      {showAddExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
+          <div className="bg-white rounded-t-3xl p-6 w-full">
+            <button onClick={() => setShowAddExpense(false)} className="mb-4">
+              <X />
+            </button>
+
+            <input
+              className="w-full mb-3 p-3 border rounded-xl"
+              placeholder="Nome"
+              value={newExpense.name}
+              onChange={(e) =>
+                setNewExpense({ ...newExpense, name: e.target.value })
+              }
+            />
+
+            <input
+              className="w-full mb-3 p-3 border rounded-xl"
+              type="number"
+              placeholder="Valor"
+              value={newExpense.value}
+              onChange={(e) =>
+                setNewExpense({ ...newExpense, value: e.target.value })
+              }
+            />
+
+            <button
+              onClick={handleAddExpense}
+              className="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold"
+            >
+              Salvar Gasto
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
