@@ -22,6 +22,8 @@ export default function Transactions({ expenses = [], setExpenses }) {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showFixedExpenses, setShowFixedExpenses] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [swipedItem, setSwipedItem] = useState(null);
 
   const [newExpense, setNewExpense] = useState({
@@ -143,6 +145,34 @@ export default function Transactions({ expenses = [], setExpenses }) {
       });
       setShowAddExpense(false);
     }
+  };
+
+  const handleEditExpense = () => {
+    if (editingExpense.name && editingExpense.value) {
+      setExpenses(
+        expenses.map((e) =>
+          e.id === editingExpense.id
+            ? {
+                ...editingExpense,
+                value: parseFloat(editingExpense.value),
+                paid:
+                  editingExpense.paid === "pago" ||
+                  editingExpense.paid === true,
+              }
+            : e
+        )
+      );
+      setEditingExpense(null);
+      setShowEditExpense(false);
+    }
+  };
+
+  const openEditExpense = (expense) => {
+    setEditingExpense({
+      ...expense,
+      paid: expense.paid ? "pago" : "pendente",
+    });
+    setShowEditExpense(true);
   };
 
   const handleAddFixedExpense = () => {
@@ -379,6 +409,7 @@ export default function Transactions({ expenses = [], setExpenses }) {
                       onTouchStart={(e) => handleTouchStart(e, expense.id)}
                       onTouchMove={(e) => handleTouchMove(e, expense.id)}
                       onTouchEnd={(e) => handleTouchEnd(e, expense)}
+                      onClick={() => openEditExpense(expense)}
                     >
                       <div className="w-12 h-12 bg-teal-100 rounded-2xl flex items-center justify-center mr-3 flex-shrink-0">
                         <ShoppingBag className="w-6 h-6 text-teal-600" />
@@ -502,6 +533,114 @@ export default function Transactions({ expenses = [], setExpenses }) {
             >
               Salvar Gasto
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Gasto */}
+      {showEditExpense && editingExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
+          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Editar Gasto</h3>
+              <button
+                onClick={() => {
+                  setShowEditExpense(false);
+                  setEditingExpense(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={editingExpense.name}
+                onChange={(e) =>
+                  setEditingExpense({ ...editingExpense, name: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                placeholder="Nome do gasto"
+              />
+              <input
+                type="number"
+                value={editingExpense.value}
+                onChange={(e) =>
+                  setEditingExpense({
+                    ...editingExpense,
+                    value: e.target.value,
+                  })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                placeholder="Valor (€)"
+              />
+              <select
+                value={editingExpense.category || ""}
+                onChange={(e) =>
+                  setEditingExpense({
+                    ...editingExpense,
+                    category: e.target.value,
+                  })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white text-base"
+              >
+                <option value="">Categoria (opcional)</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={editingExpense.paid}
+                onChange={(e) =>
+                  setEditingExpense({ ...editingExpense, paid: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
+              >
+                <option value="pendente">Pendente</option>
+                <option value="pago">Pago</option>
+              </select>
+              <select
+                value={editingExpense.week}
+                onChange={(e) =>
+                  setEditingExpense({ ...editingExpense, week: e.target.value })
+                }
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
+              >
+                <option value="1">1ª Semana</option>
+                <option value="2">2ª Semana</option>
+                <option value="3">3ª Semana</option>
+                <option value="4">4ª Semana</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Tem certeza que deseja eliminar este gasto?"
+                    )
+                  ) {
+                    handleDelete(editingExpense.id);
+                    setShowEditExpense(false);
+                    setEditingExpense(null);
+                  }
+                }}
+                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+              >
+                Eliminar
+              </button>
+              <button
+                onClick={handleEditExpense}
+                className="flex-1 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+              >
+                Salvar
+              </button>
+            </div>
           </div>
         </div>
       )}
