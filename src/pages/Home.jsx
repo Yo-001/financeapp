@@ -11,7 +11,7 @@ import {
   LabelList,
 } from "recharts";
 
-export default function Home({ expenses, setShowInsights }) {
+export default function Home({ expenses, setShowInsights, monthlyHistory }) {
   const [activeIndex, setActiveIndex] = useState(null);
 
   const monthNames = [
@@ -28,6 +28,22 @@ export default function Home({ expenses, setShowInsights }) {
     "Novembro",
     "Dezembro",
   ];
+
+  const monthNamesShort = [
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
+  ];
+
   const currentMonthName = monthNames[new Date().getMonth()];
 
   const currentMonthExpenses = expenses.filter(
@@ -46,21 +62,23 @@ export default function Home({ expenses, setShowInsights }) {
     { name: "Restante", value: totalPending, color: "#d1d5db" },
   ];
 
-  const monthlyData = [
-    { month: "Mai", value: 876 },
-    { month: "Jun", value: 1050 },
-    { month: "Jul", value: 1110 },
-    { month: "Ago", value: 876 },
-    { month: "Set", value: 1476 },
-    { month: "Out", value: 1276 },
-    { month: "Nov", value: 1194 },
-  ];
+  // Gráfico dinâmico baseado no histórico real
+  const monthlyData = monthlyHistory
+    .slice(-7) // Últimos 7 meses
+    .map((item) => ({
+      month: monthNamesShort[item.month],
+      value: item.total,
+      year: item.year,
+      fullMonth: monthNames[item.month],
+    }));
+
+  // Se não houver dados suficientes, mostra mensagem
+  const hasHistoryData = monthlyData.length > 0;
 
   return (
     <div className="flex-1 bg-gradient-to-b from-teal-50 to-gray-50 pb-20">
       {/* CSS global para remover TODOS os contornos e highlights */}
       <style>{`
-        /* Remove contorno de foco */
         .recharts-surface:focus, 
         .recharts-wrapper:focus, 
         .recharts-rectangle:focus, 
@@ -76,7 +94,6 @@ export default function Home({ expenses, setShowInsights }) {
           outline-offset: 0 !important;
         }
 
-        /* Remove highlight de toque mobile */
         * {
           -webkit-tap-highlight-color: transparent !important;
           -webkit-touch-callout: none !important;
@@ -86,7 +103,6 @@ export default function Home({ expenses, setShowInsights }) {
           user-select: none !important;
         }
 
-        /* Remove contorno laranja específico do Recharts */
         .recharts-wrapper,
         .recharts-surface,
         .recharts-bar,
@@ -95,7 +111,6 @@ export default function Home({ expenses, setShowInsights }) {
           border: none !important;
         }
 
-        /* Remove qualquer foco visível */
         .recharts-wrapper *:focus {
           outline: none !important;
         }
@@ -174,64 +189,79 @@ export default function Home({ expenses, setShowInsights }) {
           <h3 className="text-gray-900 font-bold mb-3 text-lg">
             Últimos Meses
           </h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart
-              data={monthlyData}
-              margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
-            >
-              <XAxis
-                dataKey="month"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#999", fontSize: 11 }}
-              />
 
-              <Bar
-                dataKey="value"
-                fill="#14b8a6"
-                radius={[6, 6, 0, 0]}
-                isAnimationActive={false}
-                onClick={(data, index) => {
-                  setActiveIndex(activeIndex === index ? null : index);
-                }}
-              >
-                <LabelList
-                  dataKey="value"
-                  position="top"
-                  content={(props) => {
-                    const { x, y, width, value, index } = props;
-                    if (index !== activeIndex) return null;
-                    return (
-                      <g>
-                        <rect
-                          x={x + width / 2 - 30}
-                          y={y - 30}
-                          width="60"
-                          height="24"
-                          fill="#14b8a6"
-                          rx="12"
-                          opacity="0.95"
-                        />
-                        <text
-                          x={x + width / 2}
-                          y={y - 13}
-                          fill="white"
-                          textAnchor="middle"
-                          fontSize="13"
-                          fontWeight="bold"
-                        >
-                          €{value}
-                        </text>
-                      </g>
-                    );
-                  }}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="text-xs text-gray-400 text-center mt-2">
-            💡 Clique nas barras para ver o valor
-          </p>
+          {hasHistoryData ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart
+                  data={monthlyData}
+                  margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#999", fontSize: 11 }}
+                  />
+
+                  <Bar
+                    dataKey="value"
+                    fill="#14b8a6"
+                    radius={[6, 6, 0, 0]}
+                    isAnimationActive={false}
+                    onClick={(data, index) => {
+                      setActiveIndex(activeIndex === index ? null : index);
+                    }}
+                  >
+                    <LabelList
+                      dataKey="value"
+                      position="top"
+                      content={(props) => {
+                        const { x, y, width, value, index } = props;
+                        if (index !== activeIndex) return null;
+                        return (
+                          <g>
+                            <rect
+                              x={x + width / 2 - 30}
+                              y={y - 30}
+                              width="60"
+                              height="24"
+                              fill="#14b8a6"
+                              rx="12"
+                              opacity="0.95"
+                            />
+                            <text
+                              x={x + width / 2}
+                              y={y - 13}
+                              fill="white"
+                              textAnchor="middle"
+                              fontSize="13"
+                              fontWeight="bold"
+                            >
+                              €{value}
+                            </text>
+                          </g>
+                        );
+                      }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-gray-400 text-center mt-2">
+                💡 Clique nas barras para ver o valor
+              </p>
+            </>
+          ) : (
+            <div className="h-40 flex flex-col items-center justify-center text-center px-4">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                <TrendingUp className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-1">Sem histórico ainda</p>
+              <p className="text-xs text-gray-400">
+                Inicie meses na aba Período para ver o gráfico
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

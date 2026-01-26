@@ -9,82 +9,9 @@ import { Preferences } from "@capacitor/preferences";
 function App() {
   const [activeTab, setActiveTab] = useState("inicio");
   const [showInsights, setShowInsights] = useState(false);
-
-  const [expenses, setExpenses] = useState([
-    {
-      id: 1,
-      name: "Supermercado",
-      value: 450,
-      date: "2025-11-20",
-      category: "Alimentação",
-      paid: true,
-      week: "3",
-    },
-    {
-      id: 2,
-      name: "Restaurante",
-      value: 120,
-      date: "2025-11-18",
-      category: "Alimentação",
-      paid: true,
-      week: "3",
-    },
-    {
-      id: 3,
-      name: "Gasolina",
-      value: 200,
-      date: "2025-11-15",
-      category: "Transporte",
-      paid: true,
-      week: "2",
-    },
-    {
-      id: 4,
-      name: "Farmácia",
-      value: 85,
-      date: "2025-11-12",
-      category: "Saúde",
-      paid: true,
-      week: "2",
-    },
-    {
-      id: 5,
-      name: "Cinema",
-      value: 60,
-      date: "2025-11-10",
-      category: "Lazer",
-      paid: false,
-      week: "2",
-    },
-    {
-      id: 6,
-      name: "Conta de Luz",
-      value: 180,
-      date: "2025-11-05",
-      category: "Moradia",
-      paid: true,
-      week: "1",
-    },
-  ]);
-
-  const [planningItems, setPlanningItems] = useState([
-    {
-      id: 1,
-      name: "Notebook Gamer",
-      value: 2500,
-      paymentMethods: ["parcelado"],
-      installments: 10,
-      link: "https://amazon.com",
-    },
-    {
-      id: 2,
-      name: "Celular",
-      value: 1500,
-      paymentMethods: ["parcelado"],
-      installments: 5,
-      link: "",
-    },
-  ]);
+  const [expenses, setExpenses] = useState([]);
+  const [planningItems, setPlanningItems] = useState([]);
+  const [monthlyHistory, setMonthlyHistory] = useState([]);
 
   /* ==========================
      LOAD STORAGE (ON START)
@@ -97,11 +24,14 @@ function App() {
       const { value: savedPlanning } = await Preferences.get({
         key: "planningItems",
       });
+      const { value: savedHistory } = await Preferences.get({
+        key: "monthlyHistory",
+      });
 
       if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
       if (savedPlanning) setPlanningItems(JSON.parse(savedPlanning));
+      if (savedHistory) setMonthlyHistory(JSON.parse(savedHistory));
     };
-
     loadData();
   }, []);
 
@@ -122,29 +52,88 @@ function App() {
     });
   }, [planningItems]);
 
+  useEffect(() => {
+    Preferences.set({
+      key: "monthlyHistory",
+      value: JSON.stringify(monthlyHistory),
+    });
+  }, [monthlyHistory]);
+
+  /* ==========================
+     UPDATE MONTHLY HISTORY
+     Atualiza automaticamente quando expenses mudam
+  =========================== */
+  useEffect(() => {
+    updateMonthlyHistory();
+  }, [expenses]);
+
+  const updateMonthlyHistory = () => {
+    // Agrupa gastos por mês/ano
+    const groupedByMonth = {};
+
+    expenses.forEach((expense) => {
+      const date = new Date(expense.date);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const key = `${year}-${month}`;
+
+      if (!groupedByMonth[key]) {
+        groupedByMonth[key] = {
+          year,
+          month,
+          total: 0,
+          paid: 0,
+          pending: 0,
+        };
+      }
+
+      groupedByMonth[key].total += expense.value;
+      if (expense.paid) {
+        groupedByMonth[key].paid += expense.value;
+      } else {
+        groupedByMonth[key].pending += expense.value;
+      }
+    });
+
+    // Converte para array e ordena por data
+    const historyArray = Object.values(groupedByMonth)
+      .sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      })
+      .map((item) => ({
+        ...item,
+        total: Math.round(item.total),
+        paid: Math.round(item.paid),
+        pending: Math.round(item.pending),
+      }));
+
+    setMonthlyHistory(historyArray);
+  };
+
   return (
     <div className="w-full h-screen bg-gray-50 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!showInsights && activeTab === "inicio" && (
-          <Home expenses={expenses} setShowInsights={setShowInsights} />
+          <Home
+            expenses={expenses}
+            setShowInsights={setShowInsights}
+            monthlyHistory={monthlyHistory}
+          />
         )}
-
         {!showInsights && activeTab === "periodo" && (
           <Transactions expenses={expenses} setExpenses={setExpenses} />
         )}
-
         {!showInsights && activeTab === "planejamento" && (
           <Plans
             planningItems={planningItems}
             setPlanningItems={setPlanningItems}
           />
         )}
-
         {showInsights && (
           <More expenses={expenses} setShowInsights={setShowInsights} />
         )}
       </div>
-
       {!showInsights && (
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
