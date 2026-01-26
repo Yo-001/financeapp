@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Plus,
   DollarSign,
@@ -9,13 +9,13 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import { Preferences } from "@capacitor/preferences";
 
 export default function Plans({ planningItems, setPlanningItems }) {
   const [showAddPlanning, setShowAddPlanning] = useState(false);
   const [selectedPlanningItem, setSelectedPlanningItem] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+
   const [newPlanning, setNewPlanning] = useState({
     name: "",
     value: "",
@@ -25,105 +25,65 @@ export default function Plans({ planningItems, setPlanningItems }) {
   });
 
   /* ==========================
-     CARREGAR DADOS AO INICIAR
+     CALCULOS
   =========================== */
-  useEffect(() => {
-    loadPlanningItems();
-  }, []);
-
-  const loadPlanningItems = async () => {
-    try {
-      const { value } = await Preferences.get({ key: "planningItems" });
-      if (value) {
-        const items = JSON.parse(value);
-        setPlanningItems(items);
-        console.log("✅ Planejamento carregado:", items.length, "itens");
-      }
-    } catch (error) {
-      console.error("❌ Erro ao carregar planejamento:", error);
-    }
-  };
-
-  /* ==========================
-     SALVAR DADOS AUTOMATICAMENTE
-  =========================== */
-  const savePlanningItems = async (items) => {
-    try {
-      await Preferences.set({
-        key: "planningItems",
-        value: JSON.stringify(items),
-      });
-      console.log("💾 Planejamento salvo:", items.length, "itens");
-    } catch (error) {
-      console.error("❌ Erro ao salvar planejamento:", error);
-    }
-  };
-
   const totalPlanned = planningItems.reduce((sum, item) => sum + item.value, 0);
+
   const monthlyInstallment = planningItems
     .filter((i) => i.paymentMethods.includes("parcelado"))
     .reduce((sum, i) => sum + i.value / (i.installments || 1), 0);
 
-  const handleAddPlanning = async () => {
+  /* ==========================
+     ACTIONS
+  =========================== */
+  const handleAddPlanning = () => {
     if (
-      newPlanning.name &&
-      newPlanning.value &&
-      newPlanning.paymentMethods.length > 0
-    ) {
-      const newItem = {
-        id: Date.now(),
-        name: newPlanning.name,
-        value: parseFloat(newPlanning.value),
-        paymentMethods: newPlanning.paymentMethods,
-        installments: newPlanning.paymentMethods.includes("parcelado")
-          ? parseInt(newPlanning.installments) || 0
-          : 0,
-        link: newPlanning.link,
-      };
+      !newPlanning.name ||
+      !newPlanning.value ||
+      newPlanning.paymentMethods.length === 0
+    )
+      return;
 
-      const updatedItems = [...planningItems, newItem];
-      setPlanningItems(updatedItems);
-      await savePlanningItems(updatedItems);
+    const newItem = {
+      id: Date.now(),
+      name: newPlanning.name,
+      value: parseFloat(newPlanning.value),
+      paymentMethods: newPlanning.paymentMethods,
+      installments: newPlanning.paymentMethods.includes("parcelado")
+        ? parseInt(newPlanning.installments) || 0
+        : 0,
+      link: newPlanning.link,
+    };
 
-      setNewPlanning({
-        name: "",
-        value: "",
-        paymentMethods: [],
-        installments: "",
-        link: "",
-      });
-      setShowAddPlanning(false);
-    }
+    setPlanningItems((prev) => [...prev, newItem]);
+
+    setNewPlanning({
+      name: "",
+      value: "",
+      paymentMethods: [],
+      installments: "",
+      link: "",
+    });
+
+    setShowAddPlanning(false);
   };
 
-  const handleEditPlanning = async () => {
-    if (
-      editingItem.name &&
-      editingItem.value &&
-      editingItem.paymentMethods.length > 0
-    ) {
-      const updatedItems = planningItems.map((item) =>
-        item.id === editingItem.id ? editingItem : item
-      );
+  const handleEditPlanning = () => {
+    setPlanningItems((prev) =>
+      prev.map((item) => (item.id === editingItem.id ? editingItem : item))
+    );
 
-      setPlanningItems(updatedItems);
-      await savePlanningItems(updatedItems);
-
-      setIsEditing(false);
-      setEditingItem(null);
-      setSelectedPlanningItem(null);
-    }
+    setIsEditing(false);
+    setEditingItem(null);
+    setSelectedPlanningItem(null);
   };
 
-  const handleDeletePlanning = async (id) => {
-    if (window.confirm("Tem certeza que deseja eliminar este item?")) {
-      const updatedItems = planningItems.filter((item) => item.id !== id);
+  const handleDeletePlanning = (id) => {
+    if (!window.confirm("Tem certeza que deseja eliminar este item?")) return;
 
-      setPlanningItems(updatedItems);
-      await savePlanningItems(updatedItems);
+    setPlanningItems((prev) => prev.filter((item) => item.id !== id));
 
-      setSelectedPlanningItem(null);
-    }
+    setSelectedPlanningItem(null);
   };
 
   const startEditing = (item) => {
@@ -131,13 +91,18 @@ export default function Plans({ planningItems, setPlanningItems }) {
     setIsEditing(true);
   };
 
+  /* ==========================
+     RENDER
+  =========================== */
   return (
     <div className="flex-1 bg-gray-50 pb-20">
+      {/* HEADER */}
       <div className="bg-white px-4 pt-6 pb-4 border-b">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Planejamento</h1>
         <p className="text-sm text-gray-500">Organize compras futuras</p>
       </div>
 
+      {/* RESUMO */}
       <div className="px-4 pt-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
@@ -145,6 +110,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
             <p className="text-xs opacity-90 mb-1">Total</p>
             <p className="text-2xl font-bold">€{totalPlanned}</p>
           </div>
+
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
             <TrendingUp className="w-6 h-6 mb-2 opacity-80" />
             <p className="text-xs opacity-90 mb-1">Parcela/mês</p>
@@ -154,6 +120,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
           </div>
         </div>
 
+        {/* LISTA */}
         {planningItems.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm mt-8">
             <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -178,6 +145,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
                     €{item.value}
                   </p>
                 </div>
+
                 {item.installments > 0 && (
                   <div className="bg-purple-100 px-3 py-1 rounded-full h-fit">
                     <p className="text-xs font-bold text-purple-700">
@@ -208,6 +176,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
         )}
       </div>
 
+      {/* BOTÃO ADD */}
       <button
         onClick={() => setShowAddPlanning(true)}
         className="fixed bottom-24 right-4 w-16 h-16 bg-teal-600 rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition z-40"
@@ -215,6 +184,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
         <Plus className="w-8 h-8 text-white" strokeWidth={3} />
       </button>
 
+      {/* MODAL ADD */}
       {showAddPlanning && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
           <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
@@ -233,16 +203,23 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 type="text"
                 value={newPlanning.name}
                 onChange={(e) =>
-                  setNewPlanning({ ...newPlanning, name: e.target.value })
+                  setNewPlanning({
+                    ...newPlanning,
+                    name: e.target.value,
+                  })
                 }
                 className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
                 placeholder="Nome"
               />
+
               <input
                 type="number"
                 value={newPlanning.value}
                 onChange={(e) =>
-                  setNewPlanning({ ...newPlanning, value: e.target.value })
+                  setNewPlanning({
+                    ...newPlanning,
+                    value: e.target.value,
+                  })
                 }
                 className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
                 placeholder="Valor (€)"
@@ -258,18 +235,19 @@ export default function Plans({ planningItems, setPlanningItems }) {
                       type="checkbox"
                       checked={newPlanning.paymentMethods.includes(m)}
                       onChange={(e) => {
-                        if (e.target.checked)
+                        if (e.target.checked) {
                           setNewPlanning({
                             ...newPlanning,
                             paymentMethods: [...newPlanning.paymentMethods, m],
                           });
-                        else
+                        } else {
                           setNewPlanning({
                             ...newPlanning,
                             paymentMethods: newPlanning.paymentMethods.filter(
                               (x) => x !== m
                             ),
                           });
+                        }
                       }}
                       className="w-5 h-5 mr-3"
                     />
@@ -297,7 +275,10 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 type="url"
                 value={newPlanning.link}
                 onChange={(e) =>
-                  setNewPlanning({ ...newPlanning, link: e.target.value })
+                  setNewPlanning({
+                    ...newPlanning,
+                    link: e.target.value,
+                  })
                 }
                 className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl"
                 placeholder="Link (opcional)"
@@ -314,6 +295,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
         </div>
       )}
 
+      {/* MODAL DETALHES */}
       {selectedPlanningItem && !isEditing && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md">
@@ -369,14 +351,15 @@ export default function Plans({ planningItems, setPlanningItems }) {
               <div className="grid grid-cols-2 gap-3 pt-4">
                 <button
                   onClick={() => startEditing(selectedPlanningItem)}
-                  className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
+                  className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-semibold"
                 >
                   <Edit className="w-5 h-5" />
                   Editar
                 </button>
+
                 <button
                   onClick={() => handleDeletePlanning(selectedPlanningItem.id)}
-                  className="flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                  className="flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-semibold"
                 >
                   <Trash2 className="w-5 h-5" />
                   Eliminar
@@ -387,6 +370,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
         </div>
       )}
 
+      {/* MODAL EDIT */}
       {isEditing && editingItem && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
           <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
@@ -408,18 +392,25 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 type="text"
                 value={editingItem.name}
                 onChange={(e) =>
-                  setEditingItem({ ...editingItem, name: e.target.value })
+                  setEditingItem({
+                    ...editingItem,
+                    name: e.target.value,
+                  })
                 }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg"
                 placeholder="Nome"
               />
+
               <input
                 type="number"
                 value={editingItem.value}
                 onChange={(e) =>
-                  setEditingItem({ ...editingItem, value: e.target.value })
+                  setEditingItem({
+                    ...editingItem,
+                    value: e.target.value,
+                  })
                 }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg"
                 placeholder="Valor (€)"
               />
 
@@ -433,18 +424,19 @@ export default function Plans({ planningItems, setPlanningItems }) {
                       type="checkbox"
                       checked={editingItem.paymentMethods.includes(m)}
                       onChange={(e) => {
-                        if (e.target.checked)
+                        if (e.target.checked) {
                           setEditingItem({
                             ...editingItem,
                             paymentMethods: [...editingItem.paymentMethods, m],
                           });
-                        else
+                        } else {
                           setEditingItem({
                             ...editingItem,
                             paymentMethods: editingItem.paymentMethods.filter(
                               (x) => x !== m
                             ),
                           });
+                        }
                       }}
                       className="w-5 h-5 mr-3"
                     />
@@ -472,7 +464,10 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 type="url"
                 value={editingItem.link}
                 onChange={(e) =>
-                  setEditingItem({ ...editingItem, link: e.target.value })
+                  setEditingItem({
+                    ...editingItem,
+                    link: e.target.value,
+                  })
                 }
                 className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl"
                 placeholder="Link (opcional)"
@@ -481,7 +476,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
 
             <button
               onClick={handleEditPlanning}
-              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg"
             >
               Salvar Alterações
             </button>

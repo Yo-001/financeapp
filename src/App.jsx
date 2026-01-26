@@ -9,66 +9,79 @@ import { Preferences } from "@capacitor/preferences";
 function App() {
   const [activeTab, setActiveTab] = useState("inicio");
   const [showInsights, setShowInsights] = useState(false);
+
   const [expenses, setExpenses] = useState([]);
   const [planningItems, setPlanningItems] = useState([]);
   const [monthlyHistory, setMonthlyHistory] = useState([]);
+
+  const [storageLoaded, setStorageLoaded] = useState(false);
 
   /* ==========================
      LOAD STORAGE (ON START)
   =========================== */
   useEffect(() => {
     const loadData = async () => {
-      const { value: savedExpenses } = await Preferences.get({
-        key: "expenses",
-      });
-      const { value: savedPlanning } = await Preferences.get({
-        key: "planningItems",
-      });
-      const { value: savedHistory } = await Preferences.get({
-        key: "monthlyHistory",
-      });
+      try {
+        const { value: savedExpenses } = await Preferences.get({
+          key: "expenses",
+        });
+        const { value: savedPlanning } = await Preferences.get({
+          key: "planningItems",
+        });
+        const { value: savedHistory } = await Preferences.get({
+          key: "monthlyHistory",
+        });
 
-      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
-      if (savedPlanning) setPlanningItems(JSON.parse(savedPlanning));
-      if (savedHistory) setMonthlyHistory(JSON.parse(savedHistory));
+        if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
+        if (savedPlanning) setPlanningItems(JSON.parse(savedPlanning));
+        if (savedHistory) setMonthlyHistory(JSON.parse(savedHistory));
+      } catch (err) {
+        console.error("Erro ao carregar storage:", err);
+      } finally {
+        setStorageLoaded(true); // 🔑 MUITO IMPORTANTE
+      }
     };
+
     loadData();
   }, []);
 
   /* ==========================
      SAVE STORAGE (AUTO)
+     Só salva após load
   =========================== */
   useEffect(() => {
+    if (!storageLoaded) return;
     Preferences.set({
       key: "expenses",
       value: JSON.stringify(expenses),
     });
-  }, [expenses]);
+  }, [expenses, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     Preferences.set({
       key: "planningItems",
       value: JSON.stringify(planningItems),
     });
-  }, [planningItems]);
+  }, [planningItems, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     Preferences.set({
       key: "monthlyHistory",
       value: JSON.stringify(monthlyHistory),
     });
-  }, [monthlyHistory]);
+  }, [monthlyHistory, storageLoaded]);
 
   /* ==========================
      UPDATE MONTHLY HISTORY
-     Atualiza automaticamente quando expenses mudam
   =========================== */
   useEffect(() => {
+    if (!storageLoaded) return;
     updateMonthlyHistory();
-  }, [expenses]);
+  }, [expenses, storageLoaded]);
 
   const updateMonthlyHistory = () => {
-    // Agrupa gastos por mês/ano
     const groupedByMonth = {};
 
     expenses.forEach((expense) => {
@@ -88,19 +101,13 @@ function App() {
       }
 
       groupedByMonth[key].total += expense.value;
-      if (expense.paid) {
-        groupedByMonth[key].paid += expense.value;
-      } else {
-        groupedByMonth[key].pending += expense.value;
-      }
+      expense.paid
+        ? (groupedByMonth[key].paid += expense.value)
+        : (groupedByMonth[key].pending += expense.value);
     });
 
-    // Converte para array e ordena por data
     const historyArray = Object.values(groupedByMonth)
-      .sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.month - b.month;
-      })
+      .sort((a, b) => a.year - b.year || a.month - b.month)
       .map((item) => ({
         ...item,
         total: Math.round(item.total),
@@ -134,6 +141,7 @@ function App() {
           <More expenses={expenses} setShowInsights={setShowInsights} />
         )}
       </div>
+
       {!showInsights && (
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
