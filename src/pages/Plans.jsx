@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   DollarSign,
@@ -9,6 +9,7 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
+import { Preferences } from "@capacitor/preferences";
 
 export default function Plans({ planningItems, setPlanningItems }) {
   const [showAddPlanning, setShowAddPlanning] = useState(false);
@@ -23,30 +24,67 @@ export default function Plans({ planningItems, setPlanningItems }) {
     link: "",
   });
 
+  /* ==========================
+     CARREGAR DADOS AO INICIAR
+  =========================== */
+  useEffect(() => {
+    loadPlanningItems();
+  }, []);
+
+  const loadPlanningItems = async () => {
+    try {
+      const { value } = await Preferences.get({ key: "planningItems" });
+      if (value) {
+        const items = JSON.parse(value);
+        setPlanningItems(items);
+        console.log("✅ Planejamento carregado:", items.length, "itens");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao carregar planejamento:", error);
+    }
+  };
+
+  /* ==========================
+     SALVAR DADOS AUTOMATICAMENTE
+  =========================== */
+  const savePlanningItems = async (items) => {
+    try {
+      await Preferences.set({
+        key: "planningItems",
+        value: JSON.stringify(items),
+      });
+      console.log("💾 Planejamento salvo:", items.length, "itens");
+    } catch (error) {
+      console.error("❌ Erro ao salvar planejamento:", error);
+    }
+  };
+
   const totalPlanned = planningItems.reduce((sum, item) => sum + item.value, 0);
   const monthlyInstallment = planningItems
     .filter((i) => i.paymentMethods.includes("parcelado"))
     .reduce((sum, i) => sum + i.value / (i.installments || 1), 0);
 
-  const handleAddPlanning = () => {
+  const handleAddPlanning = async () => {
     if (
       newPlanning.name &&
       newPlanning.value &&
       newPlanning.paymentMethods.length > 0
     ) {
-      setPlanningItems([
-        ...planningItems,
-        {
-          id: Date.now(),
-          name: newPlanning.name,
-          value: parseFloat(newPlanning.value),
-          paymentMethods: newPlanning.paymentMethods,
-          installments: newPlanning.paymentMethods.includes("parcelado")
-            ? parseInt(newPlanning.installments) || 0
-            : 0,
-          link: newPlanning.link,
-        },
-      ]);
+      const newItem = {
+        id: Date.now(),
+        name: newPlanning.name,
+        value: parseFloat(newPlanning.value),
+        paymentMethods: newPlanning.paymentMethods,
+        installments: newPlanning.paymentMethods.includes("parcelado")
+          ? parseInt(newPlanning.installments) || 0
+          : 0,
+        link: newPlanning.link,
+      };
+
+      const updatedItems = [...planningItems, newItem];
+      setPlanningItems(updatedItems);
+      await savePlanningItems(updatedItems);
+
       setNewPlanning({
         name: "",
         value: "",
@@ -58,26 +96,32 @@ export default function Plans({ planningItems, setPlanningItems }) {
     }
   };
 
-  const handleEditPlanning = () => {
+  const handleEditPlanning = async () => {
     if (
       editingItem.name &&
       editingItem.value &&
       editingItem.paymentMethods.length > 0
     ) {
-      setPlanningItems(
-        planningItems.map((item) =>
-          item.id === editingItem.id ? editingItem : item
-        )
+      const updatedItems = planningItems.map((item) =>
+        item.id === editingItem.id ? editingItem : item
       );
+
+      setPlanningItems(updatedItems);
+      await savePlanningItems(updatedItems);
+
       setIsEditing(false);
       setEditingItem(null);
       setSelectedPlanningItem(null);
     }
   };
 
-  const handleDeletePlanning = (id) => {
+  const handleDeletePlanning = async (id) => {
     if (window.confirm("Tem certeza que deseja eliminar este item?")) {
-      setPlanningItems(planningItems.filter((item) => item.id !== id));
+      const updatedItems = planningItems.filter((item) => item.id !== id);
+
+      setPlanningItems(updatedItems);
+      await savePlanningItems(updatedItems);
+
       setSelectedPlanningItem(null);
     }
   };
@@ -110,44 +154,58 @@ export default function Plans({ planningItems, setPlanningItems }) {
           </div>
         </div>
 
-        {planningItems.map((item) => (
-          <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex justify-between mb-3">
-              <div className="flex-1">
-                <h4 className="font-bold text-gray-900 text-lg mb-1">
-                  {item.name}
-                </h4>
-                <p className="text-2xl font-bold text-teal-600">
-                  €{item.value}
-                </p>
+        {planningItems.length === 0 ? (
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm mt-8">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <DollarSign className="w-10 h-10 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              Nenhum planejamento
+            </h3>
+            <p className="text-sm text-gray-500">
+              Adicione itens que você planeja comprar
+            </p>
+          </div>
+        ) : (
+          planningItems.map((item) => (
+            <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm">
+              <div className="flex justify-between mb-3">
+                <div className="flex-1">
+                  <h4 className="font-bold text-gray-900 text-lg mb-1">
+                    {item.name}
+                  </h4>
+                  <p className="text-2xl font-bold text-teal-600">
+                    €{item.value}
+                  </p>
+                </div>
+                {item.installments > 0 && (
+                  <div className="bg-purple-100 px-3 py-1 rounded-full h-fit">
+                    <p className="text-xs font-bold text-purple-700">
+                      {item.installments}x
+                    </p>
+                  </div>
+                )}
               </div>
+
               {item.installments > 0 && (
-                <div className="bg-purple-100 px-3 py-1 rounded-full h-fit">
-                  <p className="text-xs font-bold text-purple-700">
-                    {item.installments}x
+                <div className="bg-purple-50 rounded-xl p-3 mb-3">
+                  <p className="text-sm text-purple-900 font-medium">
+                    {item.installments}x de €
+                    {(item.value / item.installments).toFixed(2)}
                   </p>
                 </div>
               )}
+
+              <button
+                onClick={() => setSelectedPlanningItem(item)}
+                className="w-full py-3 bg-gray-50 hover:bg-teal-50 text-gray-700 rounded-xl font-medium transition flex items-center justify-center gap-2"
+              >
+                <span>Ver Detalhes</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
-
-            {item.installments > 0 && (
-              <div className="bg-purple-50 rounded-xl p-3 mb-3">
-                <p className="text-sm text-purple-900 font-medium">
-                  {item.installments}x de €
-                  {(item.value / item.installments).toFixed(2)}
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={() => setSelectedPlanningItem(item)}
-              className="w-full py-3 bg-gray-50 hover:bg-teal-50 text-gray-700 rounded-xl font-medium transition flex items-center justify-center gap-2"
-            >
-              <span>Ver Detalhes</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <button
@@ -308,7 +366,6 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 </div>
               )}
 
-              {/* Botões de Ação */}
               <div className="grid grid-cols-2 gap-3 pt-4">
                 <button
                   onClick={() => startEditing(selectedPlanningItem)}
@@ -330,7 +387,6 @@ export default function Plans({ planningItems, setPlanningItems }) {
         </div>
       )}
 
-      {/* Modal Editar */}
       {isEditing && editingItem && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
           <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
