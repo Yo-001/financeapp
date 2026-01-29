@@ -27,11 +27,17 @@ export default function Plans({ planningItems, setPlanningItems }) {
   /* ==========================
      CALCULOS
   =========================== */
-  const totalPlanned = planningItems.reduce((sum, item) => sum + item.value, 0);
+  const totalPlanned = planningItems.reduce(
+    (sum, item) => sum + parseFloat(item.value || 0),
+    0
+  );
 
   const monthlyInstallment = planningItems
     .filter((i) => i.paymentMethods.includes("parcelado"))
-    .reduce((sum, i) => sum + i.value / (i.installments || 1), 0);
+    .reduce(
+      (sum, i) => sum + parseFloat(i.value || 0) / (i.installments || 1),
+      0
+    );
 
   /* ==========================
      ACTIONS
@@ -75,9 +81,18 @@ export default function Plans({ planningItems, setPlanningItems }) {
 
   const handleEditPlanning = () => {
     console.log("✏️ Editando planning item:", editingItem.id);
+
+    const updatedItem = {
+      ...editingItem,
+      value: parseFloat(editingItem.value),
+      installments: editingItem.paymentMethods.includes("parcelado")
+        ? parseInt(editingItem.installments) || 0
+        : 0,
+    };
+
     setPlanningItems((prev) => {
       const updated = prev.map((item) =>
-        item.id === editingItem.id ? editingItem : item
+        item.id === updatedItem.id ? updatedItem : item
       );
       console.log("📊 Total de items após editar:", updated.length);
       return updated;
@@ -123,7 +138,7 @@ export default function Plans({ planningItems, setPlanningItems }) {
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
             <DollarSign className="w-6 h-6 mb-2 opacity-80" />
             <p className="text-xs opacity-90 mb-1">Total</p>
-            <p className="text-2xl font-bold">€{totalPlanned}</p>
+            <p className="text-2xl font-bold">€{totalPlanned.toFixed(2)}</p>
           </div>
 
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
@@ -192,17 +207,6 @@ export default function Plans({ planningItems, setPlanningItems }) {
                 </button>
               </div>
             ))}
-
-            {/* Contador de Items Salvos */}
-            <div className="bg-teal-50 rounded-xl p-3 text-center border border-teal-200">
-              <p className="text-sm text-teal-700">
-                💾 {planningItems.length}{" "}
-                {planningItems.length === 1 ? "item salvo" : "itens salvos"}
-              </p>
-              <p className="text-xs text-teal-600 mt-1">
-                Dados persistem após fechar o app
-              </p>
-            </div>
           </>
         )}
       </div>
