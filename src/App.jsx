@@ -22,6 +22,8 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log("📂 Carregando dados do storage...");
+
         const { value: savedExpenses } = await Preferences.get({
           key: "expenses",
         });
@@ -32,13 +34,30 @@ function App() {
           key: "monthlyHistory",
         });
 
-        if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
-        if (savedPlanning) setPlanningItems(JSON.parse(savedPlanning));
-        if (savedHistory) setMonthlyHistory(JSON.parse(savedHistory));
+        if (savedExpenses) {
+          const parsed = JSON.parse(savedExpenses);
+          setExpenses(parsed);
+          console.log("✅ Expenses carregados:", parsed.length);
+        }
+
+        if (savedPlanning) {
+          const parsed = JSON.parse(savedPlanning);
+          setPlanningItems(parsed);
+          console.log("✅ Planning carregados:", parsed.length);
+        } else {
+          console.log("ℹ️ Nenhum planning salvo (primeira vez)");
+        }
+
+        if (savedHistory) {
+          const parsed = JSON.parse(savedHistory);
+          setMonthlyHistory(parsed);
+          console.log("✅ History carregado:", parsed.length);
+        }
       } catch (err) {
-        console.error("Erro ao carregar storage:", err);
+        console.error("❌ Erro ao carregar storage:", err);
       } finally {
-        setStorageLoaded(true); // 🔑 MUITO IMPORTANTE
+        setStorageLoaded(true);
+        console.log("✅ Storage carregado com sucesso!");
       }
     };
 
@@ -46,31 +65,67 @@ function App() {
   }, []);
 
   /* ==========================
-     SAVE STORAGE (AUTO)
-     Só salva após load
+     SAVE EXPENSES
   =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
-    Preferences.set({
-      key: "expenses",
-      value: JSON.stringify(expenses),
-    });
+
+    const saveExpenses = async () => {
+      try {
+        await Preferences.set({
+          key: "expenses",
+          value: JSON.stringify(expenses),
+        });
+        console.log("💾 Expenses salvos:", expenses.length);
+      } catch (err) {
+        console.error("❌ Erro ao salvar expenses:", err);
+      }
+    };
+
+    saveExpenses();
   }, [expenses, storageLoaded]);
 
+  /* ==========================
+     SAVE PLANNING ITEMS
+     🔑 CORREÇÃO PRINCIPAL AQUI
+  =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
-    Preferences.set({
-      key: "planningItems",
-      value: JSON.stringify(planningItems),
-    });
+
+    const savePlanning = async () => {
+      try {
+        await Preferences.set({
+          key: "planningItems",
+          value: JSON.stringify(planningItems),
+        });
+        console.log("💾 Planning salvos:", planningItems.length);
+      } catch (err) {
+        console.error("❌ Erro ao salvar planning:", err);
+      }
+    };
+
+    savePlanning();
   }, [planningItems, storageLoaded]);
 
+  /* ==========================
+     SAVE MONTHLY HISTORY
+  =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
-    Preferences.set({
-      key: "monthlyHistory",
-      value: JSON.stringify(monthlyHistory),
-    });
+
+    const saveHistory = async () => {
+      try {
+        await Preferences.set({
+          key: "monthlyHistory",
+          value: JSON.stringify(monthlyHistory),
+        });
+        console.log("💾 History salvos:", monthlyHistory.length);
+      } catch (err) {
+        console.error("❌ Erro ao salvar history:", err);
+      }
+    };
+
+    saveHistory();
   }, [monthlyHistory, storageLoaded]);
 
   /* ==========================

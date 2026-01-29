@@ -55,7 +55,12 @@ export default function Plans({ planningItems, setPlanningItems }) {
       link: newPlanning.link,
     };
 
-    setPlanningItems((prev) => [...prev, newItem]);
+    console.log("➕ Adicionando planning item:", newItem);
+    setPlanningItems((prev) => {
+      const updated = [...prev, newItem];
+      console.log("📊 Total de items após adicionar:", updated.length);
+      return updated;
+    });
 
     setNewPlanning({
       name: "",
@@ -69,9 +74,14 @@ export default function Plans({ planningItems, setPlanningItems }) {
   };
 
   const handleEditPlanning = () => {
-    setPlanningItems((prev) =>
-      prev.map((item) => (item.id === editingItem.id ? editingItem : item))
-    );
+    console.log("✏️ Editando planning item:", editingItem.id);
+    setPlanningItems((prev) => {
+      const updated = prev.map((item) =>
+        item.id === editingItem.id ? editingItem : item
+      );
+      console.log("📊 Total de items após editar:", updated.length);
+      return updated;
+    });
 
     setIsEditing(false);
     setEditingItem(null);
@@ -81,7 +91,12 @@ export default function Plans({ planningItems, setPlanningItems }) {
   const handleDeletePlanning = (id) => {
     if (!window.confirm("Tem certeza que deseja eliminar este item?")) return;
 
-    setPlanningItems((prev) => prev.filter((item) => item.id !== id));
+    console.log("🗑️ Deletando planning item:", id);
+    setPlanningItems((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      console.log("📊 Total de items após deletar:", updated.length);
+      return updated;
+    });
 
     setSelectedPlanningItem(null);
   };
@@ -129,50 +144,66 @@ export default function Plans({ planningItems, setPlanningItems }) {
             <h3 className="text-lg font-bold text-gray-900 mb-2">
               Nenhum planejamento
             </h3>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 mb-1">
               Adicione itens que você planeja comprar
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              💡 Os dados são salvos automaticamente
             </p>
           </div>
         ) : (
-          planningItems.map((item) => (
-            <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="flex justify-between mb-3">
-                <div className="flex-1">
-                  <h4 className="font-bold text-gray-900 text-lg mb-1">
-                    {item.name}
-                  </h4>
-                  <p className="text-2xl font-bold text-teal-600">
-                    €{item.value}
-                  </p>
+          <>
+            {planningItems.map((item) => (
+              <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div className="flex justify-between mb-3">
+                  <div className="flex-1">
+                    <h4 className="font-bold text-gray-900 text-lg mb-1">
+                      {item.name}
+                    </h4>
+                    <p className="text-2xl font-bold text-teal-600">
+                      €{item.value}
+                    </p>
+                  </div>
+
+                  {item.installments > 0 && (
+                    <div className="bg-purple-100 px-3 py-1 rounded-full h-fit">
+                      <p className="text-xs font-bold text-purple-700">
+                        {item.installments}x
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {item.installments > 0 && (
-                  <div className="bg-purple-100 px-3 py-1 rounded-full h-fit">
-                    <p className="text-xs font-bold text-purple-700">
-                      {item.installments}x
+                  <div className="bg-purple-50 rounded-xl p-3 mb-3">
+                    <p className="text-sm text-purple-900 font-medium">
+                      {item.installments}x de €
+                      {(item.value / item.installments).toFixed(2)}
                     </p>
                   </div>
                 )}
+
+                <button
+                  onClick={() => setSelectedPlanningItem(item)}
+                  className="w-full py-3 bg-gray-50 hover:bg-teal-50 text-gray-700 rounded-xl font-medium transition flex items-center justify-center gap-2"
+                >
+                  <span>Ver Detalhes</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
+            ))}
 
-              {item.installments > 0 && (
-                <div className="bg-purple-50 rounded-xl p-3 mb-3">
-                  <p className="text-sm text-purple-900 font-medium">
-                    {item.installments}x de €
-                    {(item.value / item.installments).toFixed(2)}
-                  </p>
-                </div>
-              )}
-
-              <button
-                onClick={() => setSelectedPlanningItem(item)}
-                className="w-full py-3 bg-gray-50 hover:bg-teal-50 text-gray-700 rounded-xl font-medium transition flex items-center justify-center gap-2"
-              >
-                <span>Ver Detalhes</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            {/* Contador de Items Salvos */}
+            <div className="bg-teal-50 rounded-xl p-3 text-center border border-teal-200">
+              <p className="text-sm text-teal-700">
+                💾 {planningItems.length}{" "}
+                {planningItems.length === 1 ? "item salvo" : "itens salvos"}
+              </p>
+              <p className="text-xs text-teal-600 mt-1">
+                Dados persistem após fechar o app
+              </p>
             </div>
-          ))
+          </>
         )}
       </div>
 
