@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Home from "./pages/Home";
 import Transactions from "./pages/Transactions";
 import Plans from "./pages/Plans";
 import BottomNav from "./components/BottomNav";
 import More from "./pages/More";
-import { Preferences } from "@capacitor/preferences";
+import { KEYS, loadAll, save } from "./services/storage";
+import { historyFromExpenses } from "./services/history";
+import { migrateStorage } from "./services/migrate";
 
 function App() {
   const [activeTab, setActiveTab] = useState("inicio");
@@ -12,7 +14,7 @@ function App() {
 
   const [expenses, setExpenses] = useState([]);
   const [planningItems, setPlanningItems] = useState([]);
-  const [monthlyHistory, setMonthlyHistory] = useState([]);
+  const [fixedExpenses, setFixedExpenses] = useState([]);
 
   const [storageLoaded, setStorageLoaded] = useState(false);
 
@@ -22,42 +24,22 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log("📂 Carregando dados do storage...");
-
-        const { value: savedExpenses } = await Preferences.get({
-          key: "expenses",
-        });
-        const { value: savedPlanning } = await Preferences.get({
-          key: "planningItems",
-        });
-        const { value: savedHistory } = await Preferences.get({
-          key: "monthlyHistory",
-        });
-
-        if (savedExpenses) {
-          const parsed = JSON.parse(savedExpenses);
-          setExpenses(parsed);
-          console.log("✅ Expenses carregados:", parsed.length);
+        const report = await migrateStorage();
+        if (report.historyCheck?.mismatches?.length) {
+          console.warn(
+            "⚠️ monthlyHistory legado difere do derivado:",
+            report.historyCheck.mismatches
+          );
         }
 
-        if (savedPlanning) {
-          const parsed = JSON.parse(savedPlanning);
-          setPlanningItems(parsed);
-          console.log("✅ Planning carregados:", parsed.length);
-        } else {
-          console.log("ℹ️ Nenhum planning salvo (primeira vez)");
-        }
-
-        if (savedHistory) {
-          const parsed = JSON.parse(savedHistory);
-          setMonthlyHistory(parsed);
-          console.log("✅ History carregado:", parsed.length);
-        }
+        const data = await loadAll();
+        setExpenses(data.expenses);
+        setPlanningItems(data.planningItems);
+        setFixedExpenses(data.fixedExpenses);
       } catch (err) {
         console.error("❌ Erro ao carregar storage:", err);
       } finally {
         setStorageLoaded(true);
-        console.log("✅ Storage carregado com sucesso!");
       }
     };
 
@@ -65,116 +47,32 @@ function App() {
   }, []);
 
   /* ==========================
-     SAVE EXPENSES
+     SAVE (storage único, só depois do load)
   =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
-
-    const saveExpenses = async () => {
-      try {
-        await Preferences.set({
-          key: "expenses",
-          value: JSON.stringify(expenses),
-        });
-        console.log("💾 Expenses salvos:", expenses.length);
-      } catch (err) {
-        console.error("❌ Erro ao salvar expenses:", err);
-      }
-    };
-
-    saveExpenses();
+    save(KEYS.expenses, expenses);
   }, [expenses, storageLoaded]);
 
-  /* ==========================
-     SAVE PLANNING ITEMS
-     🔑 CORREÇÃO PRINCIPAL AQUI
-  =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
-
-    const savePlanning = async () => {
-      try {
-        await Preferences.set({
-          key: "planningItems",
-          value: JSON.stringify(planningItems),
-        });
-        console.log("💾 Planning salvos:", planningItems.length);
-      } catch (err) {
-        console.error("❌ Erro ao salvar planning:", err);
-      }
-    };
-
-    savePlanning();
+    save(KEYS.planningItems, planningItems);
   }, [planningItems, storageLoaded]);
 
-  /* ==========================
-     SAVE MONTHLY HISTORY
-  =========================== */
   useEffect(() => {
     if (!storageLoaded) return;
+    save(KEYS.fixedExpenses, fixedExpenses);
+  }, [fixedExpenses, storageLoaded]);
 
-    const saveHistory = async () => {
-      try {
-        await Preferences.set({
-          key: "monthlyHistory",
-          value: JSON.stringify(monthlyHistory),
-        });
-        console.log("💾 History salvos:", monthlyHistory.length);
-      } catch (err) {
-        console.error("❌ Erro ao salvar history:", err);
-      }
-    };
-
-    saveHistory();
-  }, [monthlyHistory, storageLoaded]);
-
-  /* ==========================
-     UPDATE MONTHLY HISTORY
-  =========================== */
-  useEffect(() => {
-    if (!storageLoaded) return;
-    updateMonthlyHistory();
-  }, [expenses, storageLoaded]);
-
-  const updateMonthlyHistory = () => {
-    const groupedByMonth = {};
-
-    expenses.forEach((expense) => {
-      const date = new Date(expense.date);
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const key = `${year}-${month}`;
-
-      if (!groupedByMonth[key]) {
-        groupedByMonth[key] = {
-          year,
-          month,
-          total: 0,
-          paid: 0,
-          pending: 0,
-        };
-      }
-
-      groupedByMonth[key].total += expense.value;
-      expense.paid
-        ? (groupedByMonth[key].paid += expense.value)
-        : (groupedByMonth[key].pending += expense.value);
-    });
-
-    const historyArray = Object.values(groupedByMonth)
-      .sort((a, b) => a.year - b.year || a.month - b.month)
-      .map((item) => ({
-        ...item,
-        total: Math.round(item.total),
-        paid: Math.round(item.paid),
-        pending: Math.round(item.pending),
-      }));
-
-    setMonthlyHistory(historyArray);
-  };
+  // monthlyHistory é derivado — não é mais gravado. A chave legada fica intacta
+  // e é comparada com este resultado na migração.
+  const monthlyHistory = useMemo(
+    () => historyFromExpenses(expenses, 15),
+    [expenses]
+  );
 
   return (
-    <div className="w-full h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="w-full h-screen bg-canvas flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!showInsights && activeTab === "inicio" && (
           <Home
@@ -184,7 +82,12 @@ function App() {
           />
         )}
         {!showInsights && activeTab === "periodo" && (
-          <Transactions expenses={expenses} setExpenses={setExpenses} />
+          <Transactions
+            expenses={expenses}
+            setExpenses={setExpenses}
+            fixedExpenses={fixedExpenses}
+            setFixedExpenses={setFixedExpenses}
+          />
         )}
         {!showInsights && activeTab === "planejamento" && (
           <Plans
