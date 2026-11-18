@@ -69,7 +69,7 @@ Reexecução: com `schemaVersion = "1"` a função devolve `{ ran: false }` sem 
 
 **Rollback**: `backupBeforeMigrate.keys` contém os valores originais de todas as chaves no momento da migração; restaurar = escrever esses valores de volta (Preferences) e, se necessário, apagar `schemaVersion`. O `localStorage.fixedExpenses` original nunca foi tocado.
 
-`monthlyHistory` deixa de ser escrita: `App.jsx` deriva-a com `historyFromExpenses(expenses, 15)` a cada render.
+`monthlyHistory` deixa de ser escrita: `App.jsx` deriva-a com `historyFromExpenses(expenses, 15)` a cada render. Janela de 15 meses **confirmada** por Leonardo em 2026-11-18 — manter (não alargar); dados mais antigos continuam em `expenses`, apenas não entram no agregado.
 
 Concorrência: `migrateStorage()` guarda a execução num `inFlight` partilhado, para que dois arranques simultâneos (StrictMode em dev, duplo `useEffect`) não criem dois snapshots.
 
