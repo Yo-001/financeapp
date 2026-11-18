@@ -10,7 +10,12 @@ import {
   Filter,
 } from "lucide-react";
 
-export default function Transactions({ expenses = [], setExpenses }) {
+export default function Transactions({
+  expenses = [],
+  setExpenses,
+  fixedExpenses = [],
+  setFixedExpenses,
+}) {
   const [selectedPeriod, setSelectedPeriod] = useState("mensal");
   const [selectedYear, setSelectedYear] = useState(
     new Date().getFullYear().toString()
@@ -34,7 +39,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
     category: "",
   });
 
-  const [fixedExpenses, setFixedExpenses] = useState([]);
   const [newFixed, setNewFixed] = useState({
     name: "",
     value: "",
@@ -68,19 +72,6 @@ export default function Transactions({ expenses = [], setExpenses }) {
     { value: "11", label: "Novembro" },
     { value: "12", label: "Dezembro" },
   ];
-
-  // Carregar gastos fixos do localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("fixedExpenses");
-    if (saved) {
-      setFixedExpenses(JSON.parse(saved));
-    }
-  }, []);
-
-  // Salvar gastos fixos no localStorage
-  useEffect(() => {
-    localStorage.setItem("fixedExpenses", JSON.stringify(fixedExpenses));
-  }, [fixedExpenses]);
 
   const filteredExpenses = expenses.filter((e) => {
     const expDate = new Date(e.date);
