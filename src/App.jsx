@@ -174,7 +174,7 @@ function App() {
   };
 
   return (
-    <div className="w-full h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="w-full h-screen bg-canvas flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!showInsights && activeTab === "inicio" && (
           <Home

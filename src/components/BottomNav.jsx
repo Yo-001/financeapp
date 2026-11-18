@@ -9,13 +9,13 @@ export default function BottomNav({ activeTab, setActiveTab }) {
   ];
 
   return (
-    <div className="bg-white border-t py-2 px-6 pb-6 flex justify-between z-40">
+    <div className="bg-white border-t border-hairline py-2 px-6 pb-6 flex justify-between z-40">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
           className={`flex flex-col items-center gap-1 min-w-[64px] ${
-            activeTab === tab.id ? "text-teal-600" : "text-gray-400"
+            activeTab === tab.id ? "text-accent" : "text-faint"
           }`}
         >
           <tab.icon
