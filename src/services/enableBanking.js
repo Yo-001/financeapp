@@ -1,5 +1,5 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-import { getWeekForDate, mergeTransactions } from "./categories.js";
+import { getWeekForDate, mergeTransactions, normalizeText } from "./categories.js";
 
 export { getWeekForDate };
 
@@ -133,12 +133,13 @@ export function mapEnableBankingTx(accountUid, tx, institutionName = "") {
 
   return {
     id: `eb:${shortAcc}:${ref}`,
+    fingerprint: `fp:${shortAcc}:${amount}:${date}:${normalizeText(rawName).slice(0, 15)}`,
     name: String(rawName).trim().slice(0, 80),
     value: amount,
     date,
     week: getWeekForDate(date),
     category: null,
-    paid: tx.status === "BOOK",
+    paid: true,
     source: "bank",
     bank: institutionName || "",
     account: shortAcc,

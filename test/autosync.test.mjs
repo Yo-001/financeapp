@@ -32,7 +32,12 @@ function createHarness() {
   }
 
   const reactShim = {
-    default: { createElement: (type, props) => ({ type, props }) },
+    default: {
+      createElement: (type, props, ...children) => ({
+        type,
+        props: { ...(props || {}), children },
+      }),
+    },
     useState(initial) {
       const idx = hookIndex++;
       if (!(idx in hooks)) {
@@ -163,12 +168,13 @@ async function loadAppWithMocks() {
 
       pluginBuild.onLoad({ filter: /.*/, namespace: "virtual-react" }, () => ({
         contents: `
-          const R = globalThis.__TEST_REACT__;
-          export default R.default;
-          export const useState = R.useState;
-          export const useRef = R.useRef;
-          export const useCallback = R.useCallback;
-          export const useEffect = R.useEffect;
+          export default {
+            createElement: (...args) => globalThis.__TEST_REACT__.default.createElement(...args),
+          };
+          export const useState = (...args) => globalThis.__TEST_REACT__.useState(...args);
+          export const useRef = (...args) => globalThis.__TEST_REACT__.useRef(...args);
+          export const useCallback = (...args) => globalThis.__TEST_REACT__.useCallback(...args);
+          export const useEffect = (...args) => globalThis.__TEST_REACT__.useEffect(...args);
         `,
         loader: "js",
       }));
@@ -508,6 +514,129 @@ try {
     check(
       "Sem credenciais/conexões ativas não dispara auto-sync",
       fetchCalls === 0
+    );
+    harness.unmount();
+  }
+
+  // Teste 3: Auto-sync dispara quando bankSettings com conexões é carregado/atualizado após storageLoaded
+  {
+    const harness = createHarness();
+    let fakeNow = 1_700_000_500_000;
+    Date.now = () => fakeNow;
+    let fetchCalls = 0;
+    let savedExpenses = [];
+
+    globalThis.__TEST_REACT__ = harness.reactShim;
+    globalThis.__TEST_CAP_APP__ = {
+      addListener() {
+        return Promise.resolve({ remove() {} });
+      },
+    };
+    globalThis.__TEST_STORAGE__ = {
+      async loadAll() {
+        // Simula storageLoaded sendo concluído primeiro e bankSettings sendo preenchido depois
+        return {
+          expenses: [
+            {
+              id: "plan-prime",
+              name: "Prime Video",
+              value: 5,
+              date: "2026-11-01",
+              week: "1",
+              category: "Assinaturas",
+              paid: false,
+              source: "manual",
+            },
+          ],
+          planningItems: [],
+          fixedExpenses: [],
+          merchantRules: {},
+          bankSettings: {},
+        };
+      },
+      async save(key, value) {
+        if (key === "expenses") savedExpenses = value;
+      },
+    };
+    globalThis.fetch = async (url) => {
+      fetchCalls += 1;
+      const u = String(url);
+      if (u.endsWith("/sessions/sess-late-1")) {
+        return new Response(
+          JSON.stringify({ session_id: "sess-late-1", accounts: [{ uid: "acc-late-1" }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (u.endsWith("/accounts/acc-late-1/balances")) {
+        return new Response(JSON.stringify({ balances: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (u.includes("/accounts/acc-late-1/transactions")) {
+        return new Response(
+          JSON.stringify({
+            transactions: [
+              {
+                entry_reference: "tx-prime-1",
+                credit_debit_indicator: "DBIT",
+                transaction_amount: { amount: "5.00" },
+                remittance_information: ["AMAZON PRIME"],
+                transaction_date: "2026-11-05",
+                status: "PDNG",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    };
+
+    const App = await loadAppWithMocks();
+    harness.mount(App);
+    await harness.flush();
+
+    check(
+      "Antes de bankSettings ter conexões, auto-sync não inicia nem trava initialAutoSyncedRef",
+      fetchCalls === 0
+    );
+
+    const banksTree = (() => {
+      // Simula atualização de bankSettings como ocorreria ao carregar/salvar conexões
+      const tree = harness.getTree();
+      return tree;
+    })();
+    void banksTree;
+
+    // Muda para aba bancos para acessar setBankSettings e simular carregamento assíncrono de bankSettings
+    const bottomNavProps = harness.getTree().props.children[1].props;
+    bottomNavProps.setActiveTab("bancos");
+    await harness.flush();
+
+    const banksStubProps = harness.getTree().props.children[0].props.children[3].props;
+    banksStubProps.setBankSettings({
+      ebApplicationId: "app-late-1",
+      ebPrivateKey: privateKey,
+      connections: [
+        {
+          id: "Santander|ES",
+          institutionId: "Santander|ES",
+          institutionName: "Santander",
+          sessionId: "sess-late-1",
+          accounts: [{ uid: "acc-late-1" }],
+        },
+      ],
+    });
+    await harness.flush();
+
+    check(
+      "Auto-sync dispara quando bankSettings passa a ter conexões válidas após storageLoaded",
+      fetchCalls > 0 &&
+        savedExpenses.length === 1 &&
+        savedExpenses[0].paid === true &&
+        !savedExpenses.some((e) => e.id === "plan-prime"),
+      JSON.stringify({ fetchCalls, savedExpenses })
     );
     harness.unmount();
   }

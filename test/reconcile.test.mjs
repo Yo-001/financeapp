@@ -4,7 +4,7 @@ import {
   mergeTransactions,
   reconcileExpensesWithIncoming,
 } from "../src/services/categories.js";
-import { syncBankTransactions } from "../src/services/enableBanking.js";
+import { mapEnableBankingTx, syncBankTransactions } from "../src/services/enableBanking.js";
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -380,6 +380,99 @@ check(
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+}
+
+// 9. Deduplicação semântica quando ID muda entre PDNG (provisório) e BOOK (entry_reference)
+{
+  const pdngMapped = mapEnableBankingTx(
+    "acc-dup-1234",
+    {
+      credit_debit_indicator: "DBIT",
+      transaction_amount: { amount: "5.00" },
+      remittance_information: ["AMAZON PRIME"],
+      transaction_date: "2026-11-04",
+      status: "PDNG",
+    },
+    "Santander"
+  );
+
+  check(
+    "mapEnableBankingTx marca débito PDNG como paid: true e gera fingerprint",
+    pdngMapped?.paid === true &&
+      pdngMapped?.fingerprint === "fp:acc-dup-:5:2026-11-04:AMAZON PRIME",
+    JSON.stringify(pdngMapped)
+  );
+
+  const bookMapped = mapEnableBankingTx(
+    "acc-dup-1234",
+    {
+      entry_reference: "eb-ref-999",
+      credit_debit_indicator: "DBIT",
+      transaction_amount: { amount: "5.00" },
+      remittance_information: ["AMAZON PRIME*2X9K"],
+      transaction_date: "2026-11-06",
+      status: "BOOK",
+    },
+    "Santander"
+  );
+
+  const mergedDup = mergeTransactions([pdngMapped], [bookMapped], {});
+  check(
+    "Deduplicação semântica: não duplica quando ID muda de PDNG provisório para BOOK com entry_reference (±2 dias)",
+    mergedDup.added.length === 0 &&
+      mergedDup.duplicates === 1 &&
+      mergedDup.expenses.length === 1,
+    JSON.stringify({ added: mergedDup.added.length, duplicates: mergedDup.duplicates, expenses: mergedDup.expenses })
+  );
+}
+
+// 10. Conciliação da Prime (5 €) eliminando previsão pendente e mantendo paga
+{
+  const variants = [
+    { incomingName: "PRIME VIDEO", plannedName: "Prime" },
+    { incomingName: "AMAZON PRIME", plannedName: "PRIME VIDEO" },
+    { incomingName: "AMZN PRIME", plannedName: "Prime Video" },
+    { incomingName: "AMAZON DIGITAL", plannedName: "Prime" },
+    { incomingName: "AMAZON MEDIA", plannedName: "PRIME" },
+  ];
+
+  for (const { incomingName, plannedName } of variants) {
+    const existing = [
+      {
+        id: "plan-prime",
+        name: plannedName,
+        value: 5,
+        date: "2026-11-01",
+        week: "1",
+        category: "Assinaturas",
+        paid: false,
+        source: "manual",
+      },
+    ];
+    const tx = mapEnableBankingTx(
+      "acc-prime-1",
+      {
+        entry_reference: `ref-${incomingName}`,
+        credit_debit_indicator: "DBIT",
+        transaction_amount: { amount: "5.00" },
+        remittance_information: [incomingName],
+        transaction_date: "2026-11-05",
+        status: "PDNG",
+      },
+      "Santander"
+    );
+
+    const merged = mergeTransactions(existing, [tx], {});
+    check(
+      `Prime (${incomingName}): elimina previsão '${plannedName}' e mantém transação paga (paid: true)`,
+      merged.expenses.length === 1 &&
+        !merged.expenses.some((e) => e.id === "plan-prime") &&
+        merged.expenses[0].paid === true &&
+        merged.expenses[0].category === "Assinaturas" &&
+        merged.expenses[0].value === 5,
+      JSON.stringify(merged.expenses)
+    );
   }
 }
 

@@ -183,9 +183,14 @@ export default function App() {
 
   useEffect(() => {
     if (!storageLoaded || initialAutoSyncedRef.current) return;
+    if (!hasCredentials(bankSettings) || !getConnections(bankSettings).length) {
+      return;
+    }
+    storageLoadedRef.current = storageLoaded;
+    bankSettingsRef.current = bankSettings;
     initialAutoSyncedRef.current = true;
     triggerAutoSync();
-  }, [storageLoaded, triggerAutoSync]);
+  }, [storageLoaded, bankSettings, triggerAutoSync]);
 
   useEffect(() => {
     if (!storageLoaded) return;
