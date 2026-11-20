@@ -68,7 +68,7 @@ export function getCategoryIcon(categoryId) {
 export const KEYWORD_RULES = [
   ["Mensalidades", ["CONTAS CASA", "CARTAO", "CARTÃO", "PRESTACAO", "MENSALIDADE", "PLANO", "SEGURO", "RECIBO AYUNTAMIENTO", "AYUNTAMIENTO", "AJUNTAMENT"]],
   ["Alimentação", ["MERCADONA", "CARREFOUR", "LIDL", "ALDI", "ALCAMPO", "EROSKI", "FROIZ", "CONSUM", "DIA ", "BONPREU", "SUPERCOR", "HIPERCOR", "CAPRABO", "SUPER", "MERCADO", "RESTAUR", "CAFETER", "PIZZA", "MCDONALD", "BURGER", "KEBAB", "SUSHI", "TACO", "BAR ", "PANADER", "HORNO", "BODEGA", "TAVERNA", "GLOVO", "UBER EATS", "JUST EAT"]],
-  ["Combustível", ["SHELL", "REPSOL", "CEPSA", "BP ", "PLENITUDE", "GALP", "BALLENOIL", "PETROPRIX", "PETRONOR", "AVIA", "GASOLINA", "GASOLIN", "PETROL", "COMBUSTI"]],
+  ["Combustível", ["SHELL", "REPSOL", "CEPSA", "BP ", "PLENITUDE", "PLENERGY", "GALP", "BALLENOIL", "PETROPRIX", "PETRONOR", "AVIA", "GASOLINA", "GASOLIN", "PETROL", "COMBUSTI"]],
   ["Transporte", ["RENFE", "METRO", "BUS ", "EMT", "TAXI", "CABIFY", "BOLT", "UBER", "PARKING", "ESTACIO", "TALLER", "ITV", "SEGURO AUTO", "TUISS", "MOVO", "LIME", "BICING"]],
   ["Moradia", ["ALQUILER", "RENTE", "HIPOTECA", "COMUNIDAD", "IBERDROLA", "ENDESA", "NATURGY", "GAS NATURAL", "ELECTRIC", "AGUA", "CANAL ISABEL", "MOVISTAR", "VODAFONE", "ORANGE", "JAZZTEL", "DIGI", "ADSL", "FIBRA", "IMU", "IBI "]],
   ["Saúde", ["FARMACIA", "PHARMACY", "PARAPHARM", "DENTISTA", "DENTAL", "OPTICA", "CLINIC", "HOSPITAL", "VETERINAR", "SANITAT", "CONSULTA", "LABORATORIO"]],
@@ -208,9 +208,42 @@ function cleanTxName(name) {
     .trim();
 }
 
+const GENERIC_TX_WORDS = new Set([
+  "COMPRA",
+  "PAGO",
+  "CARGO",
+  "RECIBO",
+  "TARJETA",
+  "TARJ",
+  "DEBITO",
+  "CREDITO",
+  "EN",
+  "DE",
+  "DEL",
+  "LA",
+  "EL",
+  "CON",
+  "POR",
+  "A",
+  "THE",
+  "S",
+  "L",
+  "SA",
+  "SL",
+]);
+
+function extractMerchantCore(name) {
+  const cleaned = cleanTxName(name);
+  if (!cleaned) return "";
+  const tokens = cleaned
+    .split(" ")
+    .filter((t) => t && !GENERIC_TX_WORDS.has(t) && !/^\d+$/.test(t));
+  return tokens.length ? tokens.join(" ") : cleaned;
+}
+
 function isSimilarTxName(nameA, nameB) {
-  const a = cleanTxName(nameA);
-  const b = cleanTxName(nameB);
+  const a = extractMerchantCore(nameA);
+  const b = extractMerchantCore(nameB);
   if (!a || !b) return false;
   if (a === b) return true;
   const prefixA = a.slice(0, 15);
@@ -224,6 +257,12 @@ function isSimilarTxName(nameA, nameB) {
   return false;
 }
 
+function getTxAccount(tx) {
+  if (tx?.account) return String(tx.account);
+  const idMatch = String(tx?.id || "").match(/^eb:([^:]+):/);
+  return idMatch ? idMatch[1] : "";
+}
+
 function isSyncedTransaction(item) {
   return Boolean(
     item &&
@@ -233,12 +272,22 @@ function isSyncedTransaction(item) {
   );
 }
 
-function findSemanticMatch(tx, candidates) {
+function findSemanticMatch(
+  tx,
+  candidates,
+  { crossAccountMaxDays = 1, sameAccountMaxDays = 2 } = {}
+) {
   const txValue = Number(tx?.value) || 0;
+  const txAccount = getTxAccount(tx);
   return candidates.find((prev) => {
     const prevValue = Number(prev?.value) || 0;
     if (Math.abs(prevValue - txValue) >= 0.01) return false;
-    if (!isCloseDate(prev?.date, tx?.date, 2)) return false;
+    const prevAccount = getTxAccount(prev);
+    const isCrossAccount = Boolean(
+      txAccount && prevAccount && txAccount !== prevAccount
+    );
+    const maxDays = isCrossAccount ? crossAccountMaxDays : sameAccountMaxDays;
+    if (!isCloseDate(prev?.date, tx?.date, maxDays)) return false;
     return isSimilarTxName(prev?.name, tx?.name);
   });
 }
@@ -278,7 +327,10 @@ export function reconcileExpensesWithIncoming(existingExpenses = [], incomingTra
 
     const normTx = normalizeText(tx.name).trim();
     const isPrime = isPrimeTransaction(normTx);
-    const rawGuessedCategory = tx.category || guessCategory(tx.name);
+    const rawGuessedCategory =
+      tx.category && tx.category !== "Outros"
+        ? tx.category
+        : guessCategory(tx.name);
     const txCategory =
       isPrime &&
       (!tx.category ||
@@ -372,6 +424,7 @@ export function reconcileExpensesWithIncoming(existingExpenses = [], incomingTra
       category: txCategory,
       week: txWeek,
       paid: isPrime || tx.source === "bank" ? true : Boolean(tx.paid),
+      reconciled: true,
     };
     seenBankTxs.push(reconciledTx);
     appended.push(reconciledTx);
@@ -430,4 +483,119 @@ export function mergeTransactions(existing, incoming, merchantRules = {}) {
   const expenses = reconcileExpensesWithIncoming(workingExisting, added);
 
   return { added, duplicates, merchantRules: nextRules, expenses };
+}
+
+/**
+ * Remove transações bancárias duplicadas (inclusive entre contas diferentes do mesmo banco),
+ * recategoriza lançamentos antigos marcados como "Outros" e reconcilia previsões pendentes no mês.
+ */
+export function deduplicateAndSanitizeExpenses(expenses = [], merchantRules = {}) {
+  if (!Array.isArray(expenses)) return [];
+
+  const plannedItems = [];
+  const dedupedBank = [];
+  const seenIds = new Set();
+  const seenFingerprints = new Set();
+
+  for (const rawItem of expenses) {
+    if (!rawItem) continue;
+    const item = { ...rawItem };
+
+    if (!isSyncedTransaction(item)) {
+      plannedItems.push(item);
+      continue;
+    }
+
+    const itemId = item.id != null ? String(item.id) : null;
+    const itemFp = item.fingerprint ? String(item.fingerprint) : null;
+
+    if (itemId && seenIds.has(itemId)) {
+      const existing = dedupedBank.find((e) => e.id != null && String(e.id) === itemId);
+      if (existing) {
+        if (item.paid) existing.paid = true;
+        if (item.reconciled) existing.reconciled = true;
+        if (
+          (!existing.category || existing.category === "Outros") &&
+          item.category &&
+          item.category !== "Outros"
+        ) {
+          existing.category = item.category;
+        }
+      }
+      continue;
+    }
+
+    if (itemFp && seenFingerprints.has(itemFp)) {
+      const existing = dedupedBank.find(
+        (e) => e.fingerprint && String(e.fingerprint) === itemFp
+      );
+      if (existing) {
+        if (item.paid) existing.paid = true;
+        if (item.reconciled) existing.reconciled = true;
+        if (
+          (!existing.category || existing.category === "Outros") &&
+          item.category &&
+          item.category !== "Outros"
+        ) {
+          existing.category = item.category;
+        }
+      }
+      continue;
+    }
+
+    const semanticMatch = findSemanticMatch(item, dedupedBank, {
+      crossAccountMaxDays: 1,
+      sameAccountMaxDays: 1,
+    });
+    if (semanticMatch) {
+      if (semanticMatch.source === "bank" && (item.paid || item.source === "bank")) {
+        semanticMatch.paid = true;
+      }
+      if (item.reconciled) semanticMatch.reconciled = true;
+      if (
+        (!semanticMatch.category || semanticMatch.category === "Outros") &&
+        item.category &&
+        item.category !== "Outros"
+      ) {
+        semanticMatch.category = item.category;
+      }
+      continue;
+    }
+
+    if (itemId) seenIds.add(itemId);
+    if (itemFp) seenFingerprints.add(itemFp);
+    dedupedBank.push(item);
+  }
+
+  const alreadyReconciled = [];
+  const toReconcile = [];
+
+  for (const tx of dedupedBank) {
+    const prevCategory = tx.category;
+    const isOutrosOrEmpty = !prevCategory || prevCategory === "Outros";
+    const guessed = isOutrosOrEmpty ? guessCategory(tx.name, merchantRules) : prevCategory;
+    const nextCategory = guessed || "Outros";
+    const categoryUpgraded = isOutrosOrEmpty && nextCategory !== "Outros";
+
+    const sanitizedTx = {
+      ...tx,
+      category: nextCategory,
+      week: tx.week || getWeekForDate(tx.date),
+    };
+
+    if (sanitizedTx.reconciled && !categoryUpgraded) {
+      alreadyReconciled.push(sanitizedTx);
+    } else {
+      toReconcile.push(sanitizedTx);
+    }
+  }
+
+  if (toReconcile.length === 0) {
+    return [...plannedItems, ...alreadyReconciled];
+  }
+
+  return reconcileExpensesWithIncoming(
+    [...plannedItems, ...alreadyReconciled],
+    toReconcile
+  );
 }

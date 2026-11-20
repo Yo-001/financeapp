@@ -349,6 +349,20 @@ function getDateFrom(lastSync) {
   return new Date(dateFromMs).toISOString().slice(0, 10);
 }
 
+const RATE_LIMIT_WARNING =
+  "Limite diário de consultas atingido pelo banco. Reconecte o banco na aba Bancos para atualizar agora.";
+
+function isRateLimitError(err) {
+  const msg = String(err?.message || err || "");
+  return (
+    /\b429\b/.test(msg) ||
+    /RateLimitException/i.test(msg) ||
+    /rate.?limit/i.test(msg) ||
+    /quota/i.test(msg) ||
+    /too many requests/i.test(msg)
+  );
+}
+
 export async function syncBankTransactions(
   bankSettings = {},
   existingExpenses = [],
@@ -370,7 +384,17 @@ export async function syncBankTransactions(
 
   for (const conn of connections) {
     const sessionId = conn.sessionId;
-    let accounts = await enableBanking.listAccounts(appId, key, sessionId);
+    let rateLimitWarning = null;
+    let accounts = [];
+    try {
+      accounts = await enableBanking.listAccounts(appId, key, sessionId);
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        rateLimitWarning = RATE_LIMIT_WARNING;
+      } else {
+        throw err;
+      }
+    }
     if (!accounts.length && Array.isArray(conn.accounts) && conn.accounts.length) {
       accounts = conn.accounts;
     }
@@ -386,19 +410,30 @@ export async function syncBankTransactions(
       let accountBalances = accountObj.balances || [];
       try {
         accountBalances = await enableBanking.balances(appId, key, uid, sessionId);
-      } catch {
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          rateLimitWarning = RATE_LIMIT_WARNING;
+        }
         // keep existing balances if endpoint is unavailable for this account
       }
 
-      const txs = await enableBanking.transactions(
-        appId,
-        key,
-        uid,
-        sessionId,
-        dateFrom,
-        conn.institutionName || ""
-      );
-      incoming.push(...txs);
+      try {
+        const txs = await enableBanking.transactions(
+          appId,
+          key,
+          uid,
+          sessionId,
+          dateFrom,
+          conn.institutionName || ""
+        );
+        incoming.push(...txs);
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          rateLimitWarning = RATE_LIMIT_WARNING;
+        } else {
+          throw err;
+        }
+      }
       enrichedAccounts.push({ ...accountObj, balances: accountBalances });
     }
 
@@ -409,7 +444,9 @@ export async function syncBankTransactions(
       ...connBase,
       accounts: enrichedAccounts,
       lastSync: syncTimestamp,
-      ...(accounts.length === 0
+      ...(rateLimitWarning
+        ? { warning: rateLimitWarning }
+        : accounts.length === 0
         ? { warning: "Nenhuma conta foi selecionada no banco" }
         : {}),
     });

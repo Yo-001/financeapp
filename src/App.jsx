@@ -5,6 +5,7 @@ import Banks from "./pages/Banks";
 import Home from "./pages/Home";
 import Plans from "./pages/Plans";
 import Transactions from "./pages/Transactions";
+import { deduplicateAndSanitizeExpenses } from "./services/categories";
 import {
   getConnections,
   hasCredentials,
@@ -106,7 +107,13 @@ export default function App() {
       try {
         await migrateStorage();
         const data = await loadAll();
-        if (Array.isArray(data.expenses)) setExpenses(data.expenses);
+        const loadedRules =
+          data.merchantRules && typeof data.merchantRules === "object"
+            ? data.merchantRules
+            : {};
+        if (Array.isArray(data.expenses)) {
+          setExpenses(deduplicateAndSanitizeExpenses(data.expenses, loadedRules));
+        }
         if (Array.isArray(data.planningItems))
           setPlanningItems(data.planningItems);
         if (Array.isArray(data.fixedExpenses))

@@ -67,12 +67,14 @@ export default function Transactions({
 
   const filteredExpenses = useMemo(
     () =>
-      expenses.filter(
-        (e) =>
-          (e.date || "").startsWith(yearMonthKey) &&
-          (selectedWeek === "todas" ||
-            (e.week || getWeekForDate(e.date)) === selectedWeek)
-      ),
+      expenses
+        .filter(
+          (e) =>
+            (e.date || "").startsWith(yearMonthKey) &&
+            (selectedWeek === "todas" ||
+              (e.week || getWeekForDate(e.date)) === selectedWeek)
+        )
+        .sort((a, b) => (a.date || "").localeCompare(b.date || "")),
     [expenses, yearMonthKey, selectedWeek]
   );
 

@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import {
+  deduplicateAndSanitizeExpenses,
   guessCategory,
   mergeTransactions,
   reconcileExpensesWithIncoming,
@@ -22,7 +23,7 @@ check(
 );
 check(
   "KEYWORD_RULES: postos como Combustível",
-  ["PLENITUDE ENERGIA", "GALP ESTACION", "BALLENOIL", "PETROPRIX", "PETRONOR", "AVIA"].every(
+  ["PLENITUDE ENERGIA", "PLENERGY MADRID", "GALP ESTACION", "BALLENOIL", "PETROPRIX", "PETRONOR", "AVIA"].every(
     (name) => guessCategory(name) === "Combustível"
   )
 );
@@ -473,6 +474,314 @@ check(
         merged.expenses[0].value === 5,
       JSON.stringify(merged.expenses)
     );
+  }
+}
+
+// 11. Deduplicação cross-account (Santander 2 contas: eb:9b90ac68 vs eb:de9535a3) em mergeTransactions e reconcileExpensesWithIncoming
+{
+  const acc1Tx = {
+    id: "eb:9b90ac68:tx-1",
+    fingerprint: "fp:9b90ac68:40:2026-11-10:COMPRA PLENERGY",
+    name: "COMPRA PLENERGY MADRID",
+    value: 40,
+    date: "2026-11-10",
+    week: "2",
+    paid: true,
+    source: "bank",
+    bank: "Santander",
+    account: "9b90ac68",
+  };
+  const acc2DupSameDay = {
+    id: "eb:de9535a3:tx-2",
+    fingerprint: "fp:de9535a3:40:2026-11-11:PAGO EN PLENERG",
+    name: "PAGO EN PLENERGY",
+    value: 40,
+    date: "2026-11-11",
+    week: "2",
+    paid: true,
+    source: "bank",
+    bank: "Santander",
+    account: "de9535a3",
+  };
+  const acc2DifferentDate = {
+    id: "eb:de9535a3:tx-3",
+    name: "PAGO EN PLENERGY",
+    value: 40,
+    date: "2026-11-12",
+    week: "2",
+    paid: true,
+    source: "bank",
+    bank: "Santander",
+    account: "de9535a3",
+  };
+
+  const mergedCross = mergeTransactions([acc1Tx], [acc2DupSameDay], {});
+  check(
+    "mergeTransactions: deduplicação cross-account ignora duplicata (±1 dia, mesmo valor, nome similar)",
+    mergedCross.added.length === 0 &&
+      mergedCross.duplicates === 1 &&
+      mergedCross.expenses.length === 1,
+    JSON.stringify(mergedCross)
+  );
+
+  const reconciledCross = reconcileExpensesWithIncoming([acc1Tx], [acc2DupSameDay]);
+  check(
+    "reconcileExpensesWithIncoming: deduplicação cross-account não duplica transação de outra conta",
+    reconciledCross.length === 1 && reconciledCross[0].id === "eb:9b90ac68:tx-1",
+    JSON.stringify(reconciledCross)
+  );
+
+  const mergedFarDate = mergeTransactions([acc1Tx], [acc2DifferentDate], {});
+  check(
+    "mergeTransactions: cross-account com diferença >= 2 dias não é considerado duplicata",
+    mergedFarDate.added.length === 1 && mergedFarDate.expenses.length === 2,
+    JSON.stringify(mergedFarDate)
+  );
+}
+
+// 12. deduplicateAndSanitizeExpenses: limpa duplicatas antigas, recategoriza 'Outros' e reconcilia retroativamente (idempotente)
+{
+  const dirtyExpenses = [
+    {
+      id: "plan-m1",
+      name: "Mercado 1",
+      value: 90,
+      date: "2026-11-01",
+      week: "1",
+      category: "Alimentação",
+      paid: false,
+      source: "manual",
+    },
+    {
+      id: "plan-fuel",
+      name: "Combustível",
+      value: 100,
+      date: "2026-11-01",
+      week: "1",
+      category: "Combustível",
+      paid: false,
+      source: "manual",
+    },
+    {
+      id: "plan-nat",
+      name: "Natação",
+      value: 35,
+      date: "2026-11-01",
+      week: "1",
+      category: "Lazer",
+      paid: false,
+      source: "manual",
+    },
+    {
+      id: "eb:9b90ac68:pl1",
+      name: "PLENERGY",
+      value: 40,
+      date: "2026-11-05",
+      category: "Outros",
+      paid: true,
+      source: "bank",
+      bank: "Santander",
+      account: "9b90ac68",
+    },
+    {
+      id: "eb:de9535a3:pl2",
+      name: "PLENERGY",
+      value: 40,
+      date: "2026-11-06",
+      category: "Outros",
+      paid: true,
+      source: "bank",
+      bank: "Santander",
+      account: "de9535a3",
+    },
+    {
+      id: "eb:9b90ac68:ay1",
+      name: "AYUNTAMIENTO",
+      value: 35,
+      date: "2026-11-04",
+      category: "Outros",
+      paid: true,
+      source: "bank",
+      bank: "Santander",
+      account: "9b90ac68",
+    },
+    {
+      id: "eb:9b90ac68:er1",
+      name: "EROSKI CENTER",
+      value: 45,
+      date: "2026-11-03",
+      category: "Outros",
+      paid: true,
+      source: "bank",
+      bank: "Santander",
+      account: "9b90ac68",
+    },
+  ];
+
+  const sanitizedOnce = deduplicateAndSanitizeExpenses(dirtyExpenses);
+  const sanitizedTwice = deduplicateAndSanitizeExpenses(sanitizedOnce);
+
+  const plenergy = sanitizedOnce.find((e) => e.name === "PLENERGY");
+  const ayto = sanitizedOnce.find((e) => e.name === "AYUNTAMIENTO");
+  const eroski = sanitizedOnce.find((e) => e.name === "EROSKI CENTER");
+  const fuelPlan = sanitizedOnce.find((e) => e.id === "plan-fuel");
+  const m1Plan = sanitizedOnce.find((e) => e.id === "plan-m1");
+
+  check(
+    "deduplicateAndSanitizeExpenses: remove duplicata cross-account, recategoriza 'Outros' e reconcilia previsões",
+    sanitizedOnce.filter((e) => e.name === "PLENERGY").length === 1 &&
+      plenergy?.category === "Combustível" &&
+      ayto?.category === "Mensalidades" &&
+      eroski?.category === "Alimentação" &&
+      fuelPlan?.value === 60 &&
+      m1Plan?.value === 45 &&
+      !sanitizedOnce.some((e) => e.id === "plan-nat"),
+    JSON.stringify(sanitizedOnce)
+  );
+
+  check(
+    "deduplicateAndSanitizeExpenses: execução repetida é idempotente (não abate duas vezes)",
+    sanitizedTwice.length === sanitizedOnce.length &&
+      sanitizedTwice.find((e) => e.id === "plan-fuel")?.value === 60 &&
+      sanitizedTwice.find((e) => e.id === "plan-m1")?.value === 45,
+    JSON.stringify(sanitizedTwice)
+  );
+}
+
+// 13. Resiliência a erro 429 (RateLimitException) em syncBankTransactions
+{
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith("/sessions/sess-sant")) {
+      return new Response(
+        JSON.stringify({
+          session_id: "sess-sant",
+          accounts: [{ uid: "acc-sant-1" }, { uid: "acc-sant-2" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (u.endsWith("/sessions/sess-revo")) {
+      return new Response(
+        JSON.stringify({
+          session_id: "sess-revo",
+          accounts: [{ uid: "acc-revo-1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (u.endsWith("/accounts/acc-sant-1/balances")) {
+      return new Response(
+        JSON.stringify({ error: "RateLimitException", message: "Daily quota exceeded" }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (u.includes("/accounts/acc-sant-1/transactions")) {
+      return new Response(
+        JSON.stringify({ error: "RateLimitException", message: "Daily quota exceeded" }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (u.endsWith("/accounts/acc-sant-2/balances") || u.endsWith("/accounts/acc-revo-1/balances")) {
+      return new Response(JSON.stringify({ balances: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (u.includes("/accounts/acc-sant-2/transactions")) {
+      return new Response(
+        JSON.stringify({
+          transactions: [
+            {
+              entry_reference: "tx-sant2",
+              credit_debit_indicator: "DBIT",
+              transaction_amount: { amount: "20.00" },
+              remittance_information: ["PLENERGY"],
+              transaction_date: "2026-11-10",
+              status: "BOOK",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (u.includes("/accounts/acc-revo-1/transactions")) {
+      return new Response(
+        JSON.stringify({
+          transactions: [
+            {
+              entry_reference: "tx-revo1",
+              credit_debit_indicator: "DBIT",
+              transaction_amount: { amount: "15.00" },
+              remittance_information: ["EROSKI"],
+              transaction_date: "2026-11-11",
+              status: "BOOK",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const res429 = await syncBankTransactions(
+      {
+        ebApplicationId: "app-429",
+        ebPrivateKey: privateKey,
+        connections: [
+          {
+            id: "Santander|ES",
+            institutionName: "Santander",
+            sessionId: "sess-sant",
+            accounts: [],
+          },
+          {
+            id: "Revolut|ES",
+            institutionName: "Revolut",
+            sessionId: "sess-revo",
+            accounts: [],
+          },
+        ],
+      },
+      [
+        {
+          id: "plan-fuel",
+          name: "Combustível",
+          value: 100,
+          date: "2026-11-01",
+          week: "1",
+          category: "Combustível",
+          paid: false,
+          source: "manual",
+        },
+      ],
+      {}
+    );
+
+    const expectedWarn =
+      "Limite diário de consultas atingido pelo banco. Reconecte o banco na aba Bancos para atualizar agora.";
+    const santConn = res429.connections.find((c) => c.id === "Santander|ES");
+    const revoConn = res429.connections.find((c) => c.id === "Revolut|ES");
+
+    check(
+      "syncBankTransactions: erro 429 define warning amigável sem interromper outras contas/bancos nem a reconciliação",
+      santConn?.warning === expectedWarn &&
+        !revoConn?.warning &&
+        res429.added.length === 2 &&
+        res429.expenses.find((e) => e.id === "plan-fuel")?.value === 80,
+      JSON.stringify({ santConn, revoConn, added: res429.added, expenses: res429.expenses })
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 }
 
