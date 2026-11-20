@@ -1,29 +1,35 @@
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
-  // Classes do design system ficam disponíveis mesmo antes de todas as telas
-  // migrarem (o Tailwind só emite componentes custom que aparecem no content).
-  safelist: ["card", "field", "btn-primary", "chip"],
-
   theme: {
     extend: {
       colors: {
-        canvas: "#F6F6F4",
-        hairline: "#E8E9E6",
-        ink: "#1A1C1A",
-        soft: "#6F7671",
-        faint: "#A3A9A5",
+        canvas: "#15100A",
+        surface: "#211910",
+        raised: "#2C2114",
+        hairline: "#3A2D1D",
+        ink: "#F5EEE3",
+        soft: "#B2A28E",
+        faint: "#7C6E5C",
         accent: {
-          DEFAULT: "#0F766E",
-          soft: "#E7F2F0",
+          DEFAULT: "#FF8A00",
+          dark: "#D97208",
+          soft: "#3A2712",
         },
-        ok: "#3E7A46",
-        danger: "#B3402F",
+        ok: {
+          DEFAULT: "#4ADE80",
+          soft: "#1A3324",
+        },
+        danger: {
+          DEFAULT: "#F87171",
+          soft: "#381E1E",
+        },
+        warn: "#FBBF24",
       },
       fontFamily: {
         sans: [
           "Inter",
-          "system-ui",
           "-apple-system",
+          "BlinkMacSystemFont",
           "Segoe UI",
           "Roboto",
           "sans-serif",

@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test storage dumps
+test_phone_storage.xml
+test/storage_phone.xml
+test/*.xml

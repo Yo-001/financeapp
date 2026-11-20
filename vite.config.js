@@ -4,4 +4,13 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  server: {
+    proxy: {
+      "/api-eb": {
+        target: "https://api.enablebanking.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-eb/, ""),
+      },
+    },
+  },
 });

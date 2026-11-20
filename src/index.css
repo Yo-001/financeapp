@@ -3,34 +3,60 @@
 @tailwind utilities;
 
 @layer base {
-  html,
-  body,
-  #root {
-    height: 100%;
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
   }
 
   body {
     @apply bg-canvas font-sans text-ink antialiased;
-    -webkit-tap-highlight-color: transparent;
+  }
+
+  svg:focus,
+  path:focus,
+  rect:focus,
+  g:focus {
+    outline: none !important;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-hairline bg-white;
-  }
-
-  .field {
-    @apply h-11 w-full rounded-xl border border-hairline bg-white px-3 text-[15px] text-ink outline-none transition;
-    @apply placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent-soft;
+    @apply rounded-[22px] border border-hairline bg-surface;
   }
 
   .btn-primary {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-[15px] font-medium text-white transition;
-    @apply active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40;
+    @apply w-full rounded-2xl bg-accent py-4 text-base font-semibold text-[#1A0E00] transition;
+    @apply active:scale-[0.98] active:bg-accent-dark disabled:opacity-40;
   }
 
-  .chip {
-    @apply inline-flex h-7 items-center gap-1 rounded-full border border-hairline bg-white px-3 text-xs text-soft;
+  .btn-secondary {
+    @apply w-full rounded-2xl border border-hairline bg-raised py-4 text-base font-semibold text-ink transition;
+    @apply active:bg-surface;
+  }
+
+  .field {
+    @apply w-full rounded-2xl border border-hairline bg-raised px-4 py-3.5 text-base outline-none transition;
+    @apply placeholder:text-faint focus:border-accent;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sheet-handle {
+    @apply mx-auto mb-1 mt-3 h-1 w-10 rounded-full bg-hairline;
+  }
+
+  .page-top {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    padding-bottom: 1.5rem;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 2.75rem);
+  }
+
+  .seg {
+    @apply flex-1 rounded-xl py-2.5 text-sm font-semibold transition;
   }
 }

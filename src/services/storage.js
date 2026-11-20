@@ -112,3 +112,8 @@ export async function loadAll() {
 export async function save(key, value) {
   return writeRaw(key, JSON.stringify(value));
 }
+
+/** Lê um valor JSON único (compatível com API get do bundle). */
+export async function get(key) {
+  return readJSON(key, null);
+}

@@ -1,822 +1,818 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Plus,
-  ShoppingBag,
-  X,
-  Trash2,
   Check,
-  Settings,
-  Calendar,
-  Filter,
+  Hand,
+  Plus,
+  Repeat,
+  Rocket,
+  SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
+import BottomSheet from "../components/BottomSheet";
+import {
+  CATEGORIES,
+  formatCurrency,
+  getCategoryIcon,
+  guessCategory,
+  MONTHS,
+} from "../services/categories";
+import { getWeekForDate } from "../services/enableBanking";
+
+const now = new Date();
+const nextId = () => Date.now();
 
 export default function Transactions({
   expenses = [],
   setExpenses,
   fixedExpenses = [],
   setFixedExpenses,
+  merchantRules = {},
+  setMerchantRules,
 }) {
-  const [selectedPeriod, setSelectedPeriod] = useState("mensal");
-  const [selectedYear, setSelectedYear] = useState(
-    new Date().getFullYear().toString()
-  );
+  const [viewMode, setViewMode] = useState("mensal");
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(
-    (new Date().getMonth() + 1).toString()
+    String(now.getMonth() + 1)
   );
   const [selectedWeek, setSelectedWeek] = useState("todas");
-  const [showAddExpense, setShowAddExpense] = useState(false);
-  const [showFixedExpenses, setShowFixedExpenses] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [showFixedModal, setShowFixedModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
-  const [swipedItem, setSwipedItem] = useState(null);
+  const [swipeState, setSwipeState] = useState(null);
 
-  const [newExpense, setNewExpense] = useState({
+  const [newForm, setNewForm] = useState({
     name: "",
     value: "",
     paid: "pendente",
     week: "1",
     category: "",
+    date: "",
   });
 
-  const [newFixed, setNewFixed] = useState({
+  const [fixedForm, setFixedForm] = useState({
     name: "",
     value: "",
     week: "1",
     category: "",
   });
 
-  const categories = [
-    "Alimentação",
-    "Combustível",
-    "Assinaturas",
-    "Estudo",
-    "Poupança",
-    "Mensalidades",
-    "Lazer",
-    "Compras",
-  ];
+  const availableYears = useMemo(() => {
+    const years = new Set(expenses.map((e) => e.date.slice(0, 4)));
+    years.add(String(now.getFullYear()));
+    return [...years].sort();
+  }, [expenses]);
 
-  const years = ["2023", "2024", "2025", "2026"];
-  const months = [
-    { value: "1", label: "Janeiro" },
-    { value: "2", label: "Fevereiro" },
-    { value: "3", label: "Março" },
-    { value: "4", label: "Abril" },
-    { value: "5", label: "Maio" },
-    { value: "6", label: "Junho" },
-    { value: "7", label: "Julho" },
-    { value: "8", label: "Agosto" },
-    { value: "9", label: "Setembro" },
-    { value: "10", label: "Outubro" },
-    { value: "11", label: "Novembro" },
-    { value: "12", label: "Dezembro" },
-  ];
+  const yearMonthKey = `${selectedYear}-${selectedMonth.padStart(2, "0")}`;
 
-  const filteredExpenses = expenses.filter((e) => {
-    const expDate = new Date(e.date);
-    const expYear = expDate.getFullYear().toString();
-    const expMonth = (expDate.getMonth() + 1).toString();
+  const filteredExpenses = useMemo(
+    () =>
+      expenses.filter(
+        (e) =>
+          (e.date || "").startsWith(yearMonthKey) &&
+          (selectedWeek === "todas" ||
+            (e.week || getWeekForDate(e.date)) === selectedWeek)
+      ),
+    [expenses, yearMonthKey, selectedWeek]
+  );
 
-    if (expYear !== selectedYear) return false;
-    if (expMonth !== selectedMonth) return false;
-    if (selectedWeek !== "todas" && e.week !== selectedWeek) return false;
-
-    return true;
-  });
-
-  // Calcular totais do mês
-  const totalMonthly = filteredExpenses.reduce((sum, e) => sum + e.value, 0);
-  const totalPaid = filteredExpenses
+  const totalAmount = filteredExpenses.reduce(
+    (sum, e) => sum + Number(e.value || 0),
+    0
+  );
+  const paidAmount = filteredExpenses
     .filter((e) => e.paid)
-    .reduce((sum, e) => sum + e.value, 0);
-  const totalPending = filteredExpenses
-    .filter((e) => !e.paid)
-    .reduce((sum, e) => sum + e.value, 0);
+    .reduce((sum, e) => sum + Number(e.value || 0), 0);
+  const pendingAmount = totalAmount - paidAmount;
 
-  const weeklyData = [
-    { week: "1ª", pago: 0, pendente: 0, total: 0 },
-    { week: "2ª", pago: 0, pendente: 0, total: 0 },
-    { week: "3ª", pago: 0, pendente: 0, total: 0 },
-    { week: "4ª", pago: 0, pendente: 0, total: 0 },
-  ];
+  const weeklySummary = useMemo(() => {
+    const weeks = [1, 2, 3, 4].map((w) => ({
+      week: w,
+      pago: 0,
+      pendente: 0,
+      total: 0,
+    }));
+    filteredExpenses.forEach((e) => {
+      const idx = parseInt(e.week || getWeekForDate(e.date), 10) - 1;
+      if (idx >= 0 && idx < 4) {
+        const val = Number(e.value || 0);
+        weeks[idx].total += val;
+        if (e.paid) {
+          weeks[idx].pago += val;
+        } else {
+          weeks[idx].pendente += val;
+        }
+      }
+    });
+    return weeks;
+  }, [filteredExpenses]);
 
-  filteredExpenses.forEach((expense) => {
-    const idx = parseInt(expense.week) - 1;
-    if (idx >= 0 && idx < 4) {
-      weeklyData[idx].total += expense.value;
-      if (expense.paid) weeklyData[idx].pago += expense.value;
-      else weeklyData[idx].pendente += expense.value;
-    }
-  });
+  const suggestCategory = (name) =>
+    name.trim().length > 2 ? guessCategory(name, merchantRules) : "";
 
-  const handleAddExpense = () => {
-    if (newExpense.name && newExpense.value) {
-      const fixedMonth = selectedMonth.toString().padStart(2, "0");
-      const fixedDate = `${selectedYear}-${fixedMonth}-01`;
-
-      setExpenses([
-        ...expenses,
-        {
-          id: Date.now(),
-          name: newExpense.name,
-          value: parseFloat(newExpense.value),
-          date: fixedDate,
-          category: newExpense.category || "Outros",
-          paid: newExpense.paid === "pago",
-          week: newExpense.week,
-        },
-      ]);
-      setNewExpense({
-        name: "",
-        value: "",
-        paid: "pendente",
-        week: "1",
-        category: "",
-      });
-      setShowAddExpense(false);
-    }
+  const openAddModal = () => {
+    setNewForm({
+      name: "",
+      value: "",
+      paid: "pendente",
+      week: "1",
+      category: "",
+      date: "",
+    });
+    setShowAddModal(true);
   };
 
-  const handleEditExpense = () => {
-    if (editingExpense.name && editingExpense.value) {
-      setExpenses(
-        expenses.map((e) =>
-          e.id === editingExpense.id
-            ? {
-                ...editingExpense,
-                value: parseFloat(editingExpense.value),
-                paid:
-                  editingExpense.paid === "pago" ||
-                  editingExpense.paid === true,
-              }
-            : e
-        )
-      );
-      setEditingExpense(null);
-      setShowEditExpense(false);
-    }
+  const addExpense = () => {
+    const val = parseFloat(String(newForm.value).replace(",", "."));
+    if (!newForm.name.trim() || Number.isNaN(val) || val <= 0) return;
+
+    const category =
+      newForm.category || suggestCategory(newForm.name) || "Outros";
+
+    setExpenses([
+      ...expenses,
+      {
+        id: nextId(),
+        name: newForm.name.trim(),
+        value: val,
+        date: newForm.date || `${yearMonthKey}-01`,
+        category,
+        paid: newForm.paid === "pago",
+        week: newForm.week,
+        source: "manual",
+      },
+    ]);
+    setShowAddModal(false);
   };
 
-  const openEditExpense = (expense) => {
+  const openEditModal = (expense) => {
     setEditingExpense({
       ...expense,
-      paid: expense.paid ? "pago" : "pendente",
+      value: String(expense.value),
     });
-    setShowEditExpense(true);
   };
 
-  const handleAddFixedExpense = () => {
-    if (newFixed.name && newFixed.value) {
-      setFixedExpenses([
-        ...fixedExpenses,
-        {
-          id: Date.now(),
-          name: newFixed.name,
-          value: parseFloat(newFixed.value),
-          week: newFixed.week,
-          category: newFixed.category || "Mensalidades",
-        },
-      ]);
-      setNewFixed({ name: "", value: "", week: "1", category: "" });
+  const saveEditExpense = () => {
+    const val = parseFloat(String(editingExpense.value).replace(",", "."));
+    if (!editingExpense.name.trim() || Number.isNaN(val) || val <= 0) return;
+
+    const original = expenses.find((item) => item.id === editingExpense.id);
+    const categoryChanged = editingExpense.category !== original?.category;
+    const isImported =
+      editingExpense.source === "bank" || editingExpense.source === "import";
+
+    if (categoryChanged && isImported && editingExpense.name.trim()) {
+      setMerchantRules({
+        ...merchantRules,
+        [editingExpense.name.trim()]: editingExpense.category || "Outros",
+      });
     }
+
+    setExpenses(
+      expenses.map((item) =>
+        item.id === editingExpense.id
+          ? {
+              ...editingExpense,
+              value: val,
+              paid:
+                editingExpense.paid === true || editingExpense.paid === "pago",
+            }
+          : item
+      )
+    );
+    setEditingExpense(null);
   };
 
-  const handleRemoveFixedExpense = (id) => {
-    setFixedExpenses(fixedExpenses.filter((f) => f.id !== id));
+  const addFixedExpense = () => {
+    const val = parseFloat(String(fixedForm.value).replace(",", "."));
+    if (!fixedForm.name.trim() || Number.isNaN(val) || val <= 0) return;
+
+    setFixedExpenses([
+      ...fixedExpenses,
+      {
+        id: nextId(),
+        name: fixedForm.name.trim(),
+        value: val,
+        week: fixedForm.week,
+        category: fixedForm.category || "Mensalidades",
+      },
+    ]);
+    setFixedForm({ name: "", value: "", week: "1", category: "" });
   };
 
-  const handleInitializeMonth = () => {
+  const launchFixedForMonth = () => {
     if (fixedExpenses.length === 0) {
-      alert("Configure os gastos fixos primeiro!");
-      setShowFixedExpenses(true);
+      setShowFixedModal(true);
       return;
     }
 
-    const fixedMonth = selectedMonth.toString().padStart(2, "0");
-    const fixedDate = `${selectedYear}-${fixedMonth}-01`;
-
-    const newExpenses = fixedExpenses.map((fixed) => ({
-      id: Date.now() + Math.random(),
-      name: fixed.name,
-      value: fixed.value,
-      date: fixedDate,
-      category: fixed.category,
+    const candidates = fixedExpenses.map((item) => ({
+      id: `${nextId()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: item.name,
+      value: Number(item.value),
+      date: `${yearMonthKey}-01`,
+      category: item.category || "Mensalidades",
       paid: false,
-      week: fixed.week,
+      week: item.week || "1",
+      source: "manual",
     }));
 
-    setExpenses([...expenses, ...newExpenses]);
+    const existingNames = new Set(
+      expenses
+        .filter((e) => e.date.startsWith(yearMonthKey))
+        .map((e) => e.name.trim().toLowerCase())
+    );
+
+    const toAdd = candidates.filter(
+      (item) => !existingNames.has(item.name.toLowerCase())
+    );
+    if (toAdd.length !== 0) {
+      setExpenses([...expenses, ...toAdd]);
+    }
   };
 
-  const handleDelete = (id) => {
+  const deleteExpense = (id) => {
     setExpenses(expenses.filter((e) => e.id !== id));
-    setSwipedItem(null);
+    setSwipeState(null);
   };
 
-  const handleToggleStatus = (id) => {
+  const togglePaid = (id) => {
     setExpenses(
       expenses.map((e) => (e.id === id ? { ...e, paid: !e.paid } : e))
     );
-    setSwipedItem(null);
+    setSwipeState(null);
   };
 
-  const handleTouchStart = (e, id) => {
+  const onTouchStart = (e, id) => {
     const touch = e.touches[0];
-    setSwipedItem({ id, startX: touch.clientX, currentX: touch.clientX });
+    setSwipeState({ id, startX: touch.clientX, currentX: touch.clientX });
   };
 
-  const handleTouchMove = (e, id) => {
-    if (!swipedItem || swipedItem.id !== id) return;
+  const onTouchMove = (e, id) => {
+    if (!swipeState || swipeState.id !== id) return;
     const touch = e.touches[0];
-    setSwipedItem({ ...swipedItem, currentX: touch.clientX });
+    setSwipeState({ ...swipeState, currentX: touch.clientX });
   };
 
-  const handleTouchEnd = (e, expense) => {
-    if (!swipedItem || swipedItem.id !== expense.id) return;
-    const diff = swipedItem.currentX - swipedItem.startX;
-
-    if (Math.abs(diff) > 100) {
-      if (diff > 0) {
-        handleDelete(expense.id);
-      } else if (diff < 0) {
-        handleToggleStatus(expense.id);
+  const onTouchEnd = (_, expense) => {
+    if (!swipeState || swipeState.id !== expense.id) return;
+    const delta = swipeState.currentX - swipeState.startX;
+    if (Math.abs(delta) > 100) {
+      if (delta > 0) {
+        deleteExpense(expense.id);
+      } else {
+        togglePaid(expense.id);
       }
     }
-
-    setSwipedItem(null);
+    setSwipeState(null);
   };
 
   const getSwipeOffset = (id) => {
-    if (!swipedItem || swipedItem.id !== id) return 0;
-    const diff = swipedItem.currentX - swipedItem.startX;
-    return Math.max(-120, Math.min(120, diff));
+    if (!swipeState || swipeState.id !== id) return 0;
+    return Math.max(-120, Math.min(120, swipeState.currentX - swipeState.startX));
   };
 
+  const periodLabel = `${MONTHS[parseInt(selectedMonth, 10) - 1]} ${selectedYear}`;
+
   return (
-    <div className="flex-1 bg-gray-50 pb-20">
-      <div className="bg-white px-4 pt-6 pb-4 border-b">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">Período</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowFilters(true)}
-              className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-            >
-              <Filter className="w-5 h-5 text-gray-600" />
-            </button>
-            <button
-              onClick={() => setShowFixedExpenses(true)}
-              className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-            >
-              <Settings className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-        </div>
+    <div className="page-top">
+      <div className="flex justify-between items-center">
+        <h1 className="text-[22px] font-semibold tracking-tight">Período</h1>
         <div className="flex gap-2">
-          {["mensal", "semanal"].map((period) => (
-            <button
-              key={period}
-              onClick={() => setSelectedPeriod(period)}
-              className={`flex-1 py-3 rounded-2xl text-sm font-semibold transition ${
-                selectedPeriod === period
-                  ? "bg-teal-600 text-white shadow-lg"
-                  : "bg-gray-100 text-gray-600 active:bg-gray-200"
-              }`}
-            >
-              {period.charAt(0).toUpperCase() + period.slice(1)}
-            </button>
-          ))}
+          <button
+            onClick={() => setShowFilters(true)}
+            className="p-2.5 bg-raised border border-hairline rounded-full transition hover:bg-accent-soft"
+            aria-label="Filtros"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-soft" />
+          </button>
+          <button
+            onClick={() => setShowFixedModal(true)}
+            className="p-2.5 bg-raised border border-hairline rounded-full transition hover:bg-accent-soft"
+            aria-label="Gastos fixos"
+          >
+            <Repeat className="w-4 h-4 text-soft" />
+          </button>
         </div>
       </div>
 
-      <div className="px-4 pt-4">
-        {selectedPeriod === "semanal" ? (
-          <div className="space-y-3">
-            {weeklyData.map((week, idx) => (
-              <div key={idx} className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-bold text-gray-900">
-                    {week.week} Semana
-                  </h4>
-                  <span className="text-2xl font-bold text-teal-600">
-                    €{week.total}
+      <div className="flex bg-hairline/60 rounded-2xl p-1 mt-4">
+        {["mensal", "semanal"].map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={`seg ${
+              viewMode === mode ? "bg-raised text-ink" : "text-soft"
+            }`}
+          >
+            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {viewMode === "semanal" ? (
+        <div className="mt-5 space-y-3">
+          {weeklySummary.map((w) => {
+            const pct = w.total > 0 ? (w.pago / w.total) * 100 : 0;
+            return (
+              <div key={w.week} className="card px-5 py-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-semibold">{w.week}ª semana</h4>
+                  <span className="text-lg font-semibold tnum">
+                    {formatCurrency(w.total)}
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="h-1 bg-canvas rounded-full mt-3 overflow-hidden">
                   <div
-                    className="bg-teal-600 h-2 rounded-full"
-                    style={{ width: `${(week.pago / week.total) * 100 || 0}%` }}
+                    className="h-full bg-accent rounded-full transition-all"
+                    style={{
+                      width: `${Math.max(pct, w.pago > 0 ? 3 : 0)}%`,
+                    }}
                   />
                 </div>
-                <div className="flex justify-between mt-2 text-xs">
-                  <span className="text-green-600">Pago: €{week.pago}</span>
-                  <span className="text-orange-500">
-                    Pendente: €{week.pendente}
-                  </span>
+                <div className="flex justify-between mt-2 text-[12px] text-soft">
+                  <span>Pago {formatCurrency(w.pago)}</span>
+                  <span>Pendente {formatCurrency(w.pendente)}</span>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <>
-            {/* Resumo do Mês */}
-            <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-3xl p-5 mb-4 text-white shadow-lg">
-              <div className="flex justify-between items-center mb-3">
-                <div>
-                  <p className="text-teal-100 text-xs mb-1">
-                    {months.find((m) => m.value === selectedMonth)?.label}{" "}
-                    {selectedYear}
-                  </p>
-                  <h3 className="text-3xl font-bold">€{totalMonthly}</h3>
-                </div>
-                <button
-                  onClick={() => setShowFilters(true)}
-                  className="p-2 bg-white bg-opacity-20 rounded-xl hover:bg-opacity-30 transition"
-                >
-                  <Filter className="w-5 h-5" />
-                </button>
+            );
+          })}
+          <p className="text-center text-[12px] text-faint flex items-center justify-center gap-1.5 pt-1">
+            <Hand className="w-3.5 h-3.5" /> deslize um gasto à direita para
+            apagar, à esquerda para marcar pago
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="card mt-5 px-5 py-5">
+            <p className="text-[13px] text-soft font-medium">{periodLabel}</p>
+            <h3 className="text-[30px] font-semibold tracking-tight tnum mt-0.5">
+              {formatCurrency(totalAmount)}
+            </h3>
+            <div className="flex gap-6 mt-3">
+              <div>
+                <p className="text-[12px] text-soft">Pago</p>
+                <p className="text-sm font-semibold tnum">
+                  {formatCurrency(paidAmount)}
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="bg-white bg-opacity-20 rounded-xl p-3">
-                  <p className="text-teal-100 text-xs mb-1">Pago</p>
-                  <p className="text-2xl font-bold">€{totalPaid}</p>
-                </div>
-                <div className="bg-white bg-opacity-20 rounded-xl p-3">
-                  <p className="text-teal-100 text-xs mb-1">Pendente</p>
-                  <p className="text-2xl font-bold">€{totalPending}</p>
-                </div>
+              <div className="w-px bg-hairline" />
+              <div>
+                <p className="text-[12px] text-soft">Pendente</p>
+                <p className="text-sm font-semibold tnum">
+                  {formatCurrency(pendingAmount)}
+                </p>
               </div>
             </div>
+          </div>
 
-            {filteredExpenses.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-                <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-900 mb-2">
-                  Mês Vazio
-                </h3>
-                <p className="text-sm text-gray-500 mb-6">
-                  Nenhum gasto registrado para este período
-                </p>
+          {filteredExpenses.length === 0 ? (
+            <div className="card mt-4 px-6 py-10 text-center">
+              <h3 className="font-semibold tracking-tight">
+                Nada em {periodLabel}
+              </h3>
+              <p className="text-sm text-soft mt-1.5 mb-5">
+                Lance os gastos fixos ou adicione manualmente.
+              </p>
+              {fixedExpenses.length > 0 && (
                 <button
-                  onClick={handleInitializeMonth}
-                  className="w-full py-4 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-2xl font-bold text-lg shadow-lg active:scale-98 transition"
+                  onClick={launchFixedForMonth}
+                  className="btn-primary flex items-center justify-center gap-2"
                 >
-                  🚀 Iniciar Mês com Gastos Fixos
+                  <Rocket className="w-4 h-4" /> Iniciar mês com gastos fixos (
+                  {fixedExpenses.length})
                 </button>
-                <p className="text-xs text-gray-400 mt-3">
-                  {fixedExpenses.length > 0
-                    ? `${fixedExpenses.length} gasto(s) fixo(s) configurado(s)`
-                    : "Configure gastos fixos no ⚙️"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-0 bg-white rounded-2xl overflow-hidden shadow-sm">
-                {filteredExpenses.map((expense) => (
+              )}
+              {fixedExpenses.length === 0 && (
+                <button
+                  onClick={() => setShowFixedModal(true)}
+                  className="btn-secondary"
+                >
+                  Configurar gastos fixos
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="card mt-4 overflow-hidden">
+              {filteredExpenses.map((expense) => {
+                const Icon = getCategoryIcon(expense.category);
+                return (
                   <div
                     key={expense.id}
-                    className="relative overflow-hidden border-b border-gray-100 last:border-0"
+                    className="relative overflow-hidden border-b border-hairline last:border-0"
                   >
                     <div className="absolute inset-0 flex">
-                      <div className="flex-1 bg-red-500 flex items-center justify-start px-6">
-                        <Trash2 className="w-6 h-6 text-white" />
+                      <div className="flex-1 bg-danger/90 flex items-center justify-start px-6">
+                        <Trash2 className="w-5 h-5 text-white" />
                       </div>
-                      <div className="flex-1 bg-green-500 flex items-center justify-end px-6">
-                        <Check className="w-6 h-6 text-white" />
+                      <div className="flex-1 bg-ok/90 flex items-center justify-end px-6">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
                     </div>
 
                     <div
-                      className="bg-white p-4 flex items-center relative"
+                      className="bg-surface px-5 py-3.5 flex items-center relative"
                       style={{
-                        transform: `translateX(${getSwipeOffset(
-                          expense.id
-                        )}px)`,
+                        transform: `translateX(${getSwipeOffset(expense.id)}px)`,
                         transition:
-                          swipedItem?.id === expense.id
+                          swipeState?.id === expense.id
                             ? "none"
-                            : "transform 0.3s ease",
+                            : "transform 0.25s ease",
                       }}
-                      onTouchStart={(e) => handleTouchStart(e, expense.id)}
-                      onTouchMove={(e) => handleTouchMove(e, expense.id)}
-                      onTouchEnd={(e) => handleTouchEnd(e, expense)}
-                      onClick={() => openEditExpense(expense)}
+                      onTouchStart={(e) => onTouchStart(e, expense.id)}
+                      onTouchMove={(e) => onTouchMove(e, expense.id)}
+                      onTouchEnd={(e) => onTouchEnd(e, expense)}
+                      onClick={() => openEditModal(expense)}
                     >
-                      <div className="w-12 h-12 bg-teal-100 rounded-2xl flex items-center justify-center mr-3 flex-shrink-0">
-                        <ShoppingBag className="w-6 h-6 text-teal-600" />
+                      <div className="w-10 h-10 bg-canvas rounded-xl flex items-center justify-center mr-3.5 flex-shrink-0">
+                        <Icon
+                          className="w-[18px] h-[18px] text-soft"
+                          strokeWidth={1.8}
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-900 truncate">
+                        <h4 className="text-[15px] font-medium truncate">
                           {expense.name}
                         </h4>
-                        <p className="text-xs text-gray-500">
-                          {expense.category || "Outros"} • Semana {expense.week}
+                        <p className="text-[12px] text-soft">
+                          {expense.category || "Outros"}
+                          {expense.source === "bank" && " · banco"}
+                          {expense.bank && <span> · {expense.bank}</span>}
+                          {expense.source === "import" && " · CSV"}
                         </p>
                       </div>
                       <div className="text-right ml-2">
                         <div
-                          className={`font-bold text-lg ${
-                            expense.paid ? "text-gray-900" : "text-orange-500"
+                          className={`text-[15px] font-semibold tnum ${
+                            expense.paid ? "" : "text-warn"
                           }`}
                         >
-                          €{expense.value}
+                          {formatCurrency(expense.value)}
                         </div>
-                        <div
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            expense.paid
-                              ? "bg-green-100 text-green-700"
-                              : "bg-orange-100 text-orange-700"
-                          }`}
-                        >
-                          {expense.paid ? "✓ Pago" : "Pendente"}
+                        <div className="flex items-center justify-end gap-1 text-[11px] mt-0.5">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              expense.paid ? "bg-ok" : "bg-warn"
+                            }`}
+                          />
+                          <span className="text-soft">
+                            {expense.paid ? "Pago" : "Pendente"}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <button
-        onClick={() => setShowAddExpense(true)}
-        className="fixed bottom-24 right-4 w-16 h-16 bg-teal-600 rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition z-40"
-      >
-        <Plus className="w-8 h-8 text-white" strokeWidth={3} />
-      </button>
-
-      {/* Modal Adicionar Gasto */}
-      {showAddExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
-          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Novo Gasto</h3>
-              <button
-                onClick={() => setShowAddExpense(false)}
-                className="p-2 hover:bg-gray-100 rounded-xl"
-              >
-                <X className="w-6 h-6" />
-              </button>
+                );
+              })}
             </div>
-
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={newExpense.name}
-                onChange={(e) =>
-                  setNewExpense({ ...newExpense, name: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
-                placeholder="Nome do gasto"
-              />
-              <input
-                type="number"
-                value={newExpense.value}
-                onChange={(e) =>
-                  setNewExpense({ ...newExpense, value: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
-                placeholder="Valor (€)"
-              />
-              <select
-                value={newExpense.category}
-                onChange={(e) =>
-                  setNewExpense({ ...newExpense, category: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white text-base"
-              >
-                <option value="">Categoria (opcional)</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={newExpense.paid}
-                onChange={(e) =>
-                  setNewExpense({ ...newExpense, paid: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
-              >
-                <option value="pendente">Pendente</option>
-                <option value="pago">Pago</option>
-              </select>
-              <select
-                value={newExpense.week}
-                onChange={(e) =>
-                  setNewExpense({ ...newExpense, week: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
-              >
-                <option value="1">1ª Semana</option>
-                <option value="2">2ª Semana</option>
-                <option value="3">3ª Semana</option>
-                <option value="4">4ª Semana</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleAddExpense}
-              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
-            >
-              Salvar Gasto
-            </button>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {/* Modal Editar Gasto */}
-      {showEditExpense && editingExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
-          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Editar Gasto</h3>
-              <button
-                onClick={() => {
-                  setShowEditExpense(false);
-                  setEditingExpense(null);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-xl"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+      <button
+        onClick={openAddModal}
+        className="fixed bottom-24 right-5 w-14 h-14 bg-accent rounded-full shadow-lg flex items-center justify-center active:scale-95 transition z-40"
+        aria-label="Adicionar gasto"
+      >
+        <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
+      </button>
 
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={editingExpense.name}
-                onChange={(e) =>
-                  setEditingExpense({ ...editingExpense, name: e.target.value })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
-                placeholder="Nome do gasto"
-              />
-              <input
-                type="number"
-                value={editingExpense.value}
-                onChange={(e) =>
-                  setEditingExpense({
-                    ...editingExpense,
-                    value: e.target.value,
-                  })
-                }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl text-lg focus:border-teal-500 outline-none"
-                placeholder="Valor (€)"
-              />
+      <BottomSheet
+        open={showAddModal}
+        title="Novo gasto"
+        onClose={() => setShowAddModal(false)}
+      >
+        <div className="space-y-3">
+          <input
+            className="field"
+            placeholder="Nome do gasto"
+            value={newForm.name}
+            onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
+          />
+          <input
+            className="field"
+            type="number"
+            inputMode="decimal"
+            placeholder="Valor (€)"
+            value={newForm.value}
+            onChange={(e) => setNewForm({ ...newForm, value: e.target.value })}
+          />
+          <input
+            className="field"
+            type="date"
+            value={newForm.date}
+            onChange={(e) => setNewForm({ ...newForm, date: e.target.value })}
+          />
+          <select
+            className="field"
+            value={newForm.category}
+            onChange={(e) =>
+              setNewForm({ ...newForm, category: e.target.value })
+            }
+          >
+            <option value="">
+              Categoria
+              {suggestCategory(newForm.name)
+                ? ` (sugestão: ${suggestCategory(newForm.name)})`
+                : ""}
+            </option>
+            {CATEGORIES.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.id}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-3">
+            <select
+              className="field"
+              value={newForm.paid}
+              onChange={(e) => setNewForm({ ...newForm, paid: e.target.value })}
+            >
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+            </select>
+            <select
+              className="field"
+              value={newForm.week}
+              onChange={(e) => setNewForm({ ...newForm, week: e.target.value })}
+            >
+              {[1, 2, 3, 4].map((w) => (
+                <option key={w} value={String(w)}>
+                  {w}ª semana
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="btn-primary mt-2" onClick={addExpense}>
+            Salvar gasto
+          </button>
+        </div>
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!editingExpense}
+        title="Editar gasto"
+        onClose={() => setEditingExpense(null)}
+      >
+        {editingExpense && (
+          <div className="space-y-3">
+            <input
+              className="field"
+              placeholder="Nome do gasto"
+              value={editingExpense.name}
+              onChange={(e) =>
+                setEditingExpense({ ...editingExpense, name: e.target.value })
+              }
+            />
+            <input
+              className="field"
+              type="number"
+              inputMode="decimal"
+              placeholder="Valor (€)"
+              value={editingExpense.value}
+              onChange={(e) =>
+                setEditingExpense({ ...editingExpense, value: e.target.value })
+              }
+            />
+            <input
+              className="field"
+              type="date"
+              value={editingExpense.date}
+              onChange={(e) =>
+                setEditingExpense({ ...editingExpense, date: e.target.value })
+              }
+            />
+            <select
+              className="field"
+              value={editingExpense.category || ""}
+              onChange={(e) =>
+                setEditingExpense({
+                  ...editingExpense,
+                  category: e.target.value,
+                })
+              }
+            >
+              <option value="">Sem categoria</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.id}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-3">
               <select
-                value={editingExpense.category || ""}
-                onChange={(e) =>
-                  setEditingExpense({
-                    ...editingExpense,
-                    category: e.target.value,
-                  })
+                className="field"
+                value={
+                  editingExpense.paid === true || editingExpense.paid === "pago"
+                    ? "pago"
+                    : "pendente"
                 }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white text-base"
-              >
-                <option value="">Categoria (opcional)</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={editingExpense.paid}
                 onChange={(e) =>
                   setEditingExpense({ ...editingExpense, paid: e.target.value })
                 }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
               >
                 <option value="pendente">Pendente</option>
                 <option value="pago">Pago</option>
               </select>
               <select
-                value={editingExpense.week}
+                className="field"
+                value={editingExpense.week || "1"}
                 onChange={(e) =>
                   setEditingExpense({ ...editingExpense, week: e.target.value })
                 }
-                className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl bg-white"
               >
-                <option value="1">1ª Semana</option>
-                <option value="2">2ª Semana</option>
-                <option value="3">3ª Semana</option>
-                <option value="4">4ª Semana</option>
+                {[1, 2, 3, 4].map((w) => (
+                  <option key={w} value={String(w)}>
+                    {w}ª semana
+                  </option>
+                ))}
               </select>
             </div>
-
-            <div className="flex gap-3 mt-6">
+            {(editingExpense.source === "bank" ||
+              editingExpense.source === "import") && (
+              <p className="text-[12px] text-soft leading-relaxed">
+                Ao mudar a categoria deste gasto bancário, a regra é memorizada
+                para próximos lançamentos do mesmo comerciante.
+              </p>
+            )}
+            <div className="flex gap-3 mt-2">
               <button
+                className="btn-secondary !text-danger flex-1"
                 onClick={() => {
-                  if (
-                    window.confirm(
-                      "Tem certeza que deseja eliminar este gasto?"
-                    )
-                  ) {
-                    handleDelete(editingExpense.id);
-                    setShowEditExpense(false);
+                  if (window.confirm("Eliminar este gasto?")) {
+                    deleteExpense(editingExpense.id);
                     setEditingExpense(null);
                   }
                 }}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
               >
                 Eliminar
               </button>
-              <button
-                onClick={handleEditExpense}
-                className="flex-1 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
-              >
+              <button className="btn-primary flex-1" onClick={saveEditExpense}>
                 Salvar
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </BottomSheet>
 
-      {/* Modal Filtros */}
-      {showFilters && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
-          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[70vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Filtros</h3>
-              <button
-                onClick={() => setShowFilters(false)}
-                className="p-2 hover:bg-gray-100 rounded-xl"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Ano
-                </label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Mês
-                </label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
-                >
-                  {months.map((month) => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Semana
-                </label>
-                <select
-                  value={selectedWeek}
-                  onChange={(e) => setSelectedWeek(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl text-base"
-                >
-                  <option value="todas">Todas as Semanas</option>
-                  <option value="1">1ª Semana</option>
-                  <option value="2">2ª Semana</option>
-                  <option value="3">3ª Semana</option>
-                  <option value="4">4ª Semana</option>
-                </select>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowFilters(false)}
-              className="w-full mt-6 py-4 bg-teal-600 text-white rounded-2xl font-bold text-lg active:scale-98 transition shadow-lg"
+      <BottomSheet
+        open={showFilters}
+        title="Filtros"
+        onClose={() => setShowFilters(false)}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-[13px] font-medium text-soft mb-1.5 block">
+              Ano
+            </label>
+            <select
+              className="field"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
             >
-              Aplicar Filtros
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Gastos Fixos */}
-      {showFixedExpenses && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end z-50">
-          <div className="bg-white rounded-t-3xl p-6 w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Gastos Fixos Mensais</h3>
-              <button
-                onClick={() => setShowFixedExpenses(false)}
-                className="p-2 hover:bg-gray-100 rounded-xl"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <p className="text-sm text-gray-600 mb-6">
-              Configure os gastos que se repetem todo mês. Eles serão
-              adicionados automaticamente ao clicar em "Iniciar Mês".
-            </p>
-
-            {/* Lista de Gastos Fixos */}
-            <div className="space-y-2 mb-6">
-              {fixedExpenses.map((fixed) => (
-                <div
-                  key={fixed.id}
-                  className="bg-gray-50 rounded-2xl p-4 flex items-center"
-                >
-                  <div className="flex-1">
-                    <h4 className="font-bold text-gray-900">{fixed.name}</h4>
-                    <p className="text-xs text-gray-500">
-                      {fixed.category} • Semana {fixed.week} • €{fixed.value}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveFixedExpense(fixed.id)}
-                    className="p-2 hover:bg-red-100 rounded-xl transition"
-                  >
-                    <Trash2 className="w-5 h-5 text-red-500" />
-                  </button>
-                </div>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
               ))}
-              {fixedExpenses.length === 0 && (
-                <div className="text-center py-8 text-gray-400 text-sm">
-                  Nenhum gasto fixo configurado
-                </div>
-              )}
-            </div>
+            </select>
+          </div>
+          <div>
+            <label className="text-[13px] font-medium text-soft mb-1.5 block">
+              Mês
+            </label>
+            <select
+              className="field"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              {MONTHS.map((label, idx) => (
+                <option key={label} value={String(idx + 1)}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[13px] font-medium text-soft mb-1.5 block">
+              Semana
+            </label>
+            <select
+              className="field"
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(e.target.value)}
+            >
+              <option value="todas">Todas as semanas</option>
+              {[1, 2, 3, 4].map((w) => (
+                <option key={w} value={String(w)}>
+                  {w}ª semana
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn-primary"
+            onClick={() => setShowFilters(false)}
+          >
+            Aplicar
+          </button>
+        </div>
+      </BottomSheet>
 
-            {/* Formulário Adicionar Gasto Fixo */}
-            <div className="border-t pt-6 space-y-4">
-              <h4 className="font-bold text-gray-900">Adicionar Gasto Fixo</h4>
-              <input
-                type="text"
-                value={newFixed.name}
-                onChange={(e) =>
-                  setNewFixed({ ...newFixed, name: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-teal-500 outline-none"
-                placeholder="Nome (ex: Aluguel)"
-              />
-              <input
-                type="number"
-                value={newFixed.value}
-                onChange={(e) =>
-                  setNewFixed({ ...newFixed, value: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-teal-500 outline-none"
-                placeholder="Valor (€)"
-              />
-              <select
-                value={newFixed.category}
-                onChange={(e) =>
-                  setNewFixed({ ...newFixed, category: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl bg-white"
-              >
-                <option value="">Categoria</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={newFixed.week}
-                onChange={(e) =>
-                  setNewFixed({ ...newFixed, week: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl bg-white"
-              >
-                <option value="1">1ª Semana</option>
-                <option value="2">2ª Semana</option>
-                <option value="3">3ª Semana</option>
-                <option value="4">4ª Semana</option>
-              </select>
+      <BottomSheet
+        open={showFixedModal}
+        title="Gastos fixos mensais"
+        onClose={() => setShowFixedModal(false)}
+      >
+        <p className="text-[13px] text-soft leading-relaxed">
+          Repetem todo mês. Use &quot;Iniciar mês&quot; no resumo para
+          lançá-los de uma vez.
+        </p>
+        <div className="mt-4">
+          {fixedExpenses.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center py-3 border-b border-hairline last:border-0"
+            >
+              <div className="flex-1">
+                <h4 className="text-sm font-medium">{item.name}</h4>
+                <p className="text-[12px] text-soft tnum">
+                  {item.category} · {item.week}ª semana ·{" "}
+                  {formatCurrency(item.value)}
+                </p>
+              </div>
               <button
-                onClick={handleAddFixedExpense}
-                className="w-full py-3 bg-teal-600 text-white rounded-2xl font-bold active:scale-98 transition"
+                onClick={() =>
+                  setFixedExpenses(
+                    fixedExpenses.filter((x) => x.id !== item.id)
+                  )
+                }
+                className="p-2.5 rounded-xl bg-canvas text-faint hover:text-danger transition"
+                aria-label="Remover"
               >
-                Adicionar à Lista
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
-          </div>
+          ))}
+          {fixedExpenses.length === 0 && (
+            <p className="text-center text-sm text-faint py-6">
+              Nenhum gasto fixo configurado
+            </p>
+          )}
         </div>
-      )}
+        <div className="border-t border-hairline mt-2 pt-4 space-y-3">
+          <input
+            className="field"
+            placeholder="Nome (ex.: Aluguel)"
+            value={fixedForm.name}
+            onChange={(e) =>
+              setFixedForm({ ...fixedForm, name: e.target.value })
+            }
+          />
+          <input
+            className="field"
+            type="number"
+            inputMode="decimal"
+            placeholder="Valor (€)"
+            value={fixedForm.value}
+            onChange={(e) =>
+              setFixedForm({ ...fixedForm, value: e.target.value })
+            }
+          />
+          <div className="flex gap-3">
+            <select
+              className="field"
+              value={fixedForm.category}
+              onChange={(e) =>
+                setFixedForm({ ...fixedForm, category: e.target.value })
+              }
+            >
+              <option value="">Categoria</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.id}
+                </option>
+              ))}
+            </select>
+            <select
+              className="field"
+              value={fixedForm.week}
+              onChange={(e) =>
+                setFixedForm({ ...fixedForm, week: e.target.value })
+              }
+            >
+              {[1, 2, 3, 4].map((w) => (
+                <option key={w} value={String(w)}>
+                  {w}ª semana
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="btn-secondary" onClick={addFixedExpense}>
+            Adicionar à lista
+          </button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }
